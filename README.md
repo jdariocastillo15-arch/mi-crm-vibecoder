@@ -36,21 +36,54 @@ Hace falta Node 22 o superior.
 
 ```bash
 npm install
-
-# Una sola vez: crea el proyecto en Convex y escribe el .env.local.
-# Abre el navegador para iniciar sesión en Convex.
-npx convex dev
 ```
 
-Ese primer `npx convex dev` deja `NEXT_PUBLIC_CONVEX_URL` y `CONVEX_DEPLOYMENT`
-en un `.env.local` que **no se sube al repositorio**.
+### Este repositorio tiene su propia conexión a Convex
 
-A partir de ahí hacen falta **dos procesos a la vez**, en dos terminales:
+La credencial vive en `.env.local`, **dentro de la carpeta**, no en la sesión
+global de la máquina (`~/.convex/config.json`). Es a propósito: así este
+repositorio no comparte cuenta ni despliegue con ningún otro proyecto, y
+`npx convex` ejecutado desde aquí solo puede tocar este despliegue.
+
+El CLI resuelve credenciales por prioridad, y una deploy key gana sobre la
+sesión global. Mientras `CONVEX_DEPLOY_KEY` esté en `.env.local`, este repo es
+autónomo.
+
+**Alta, una sola vez.** En [dashboard.convex.dev](https://dashboard.convex.dev)
+crea el proyecto (`vibe-crm`), entra en **Settings → Deploy Keys**, genera una
+clave para el despliegue de **desarrollo** y pégala en `.env.local`:
+
+```bash
+cp .env.example .env.local
+# pega la clave en CONVEX_DEPLOY_KEY
+```
+
+Luego:
+
+```bash
+npx convex dev --once     # sincroniza el esquema y genera convex/_generated/
+npx @convex-dev/auth      # claves de firma de sesión, una vez por despliegue
+```
+
+Si prefieres hacerlo desde el terminal en vez del panel, `npx convex dev` sin
+más te pide login en el navegador y crea el proyecto — pero eso **sí** escribe
+la sesión global en `~/.convex`. Si tomas ese camino, genera después la clave
+propia del repo y ya quedas aislado:
+
+```bash
+npm run convex:key        # escribe CONVEX_DEPLOY_KEY en .env.local
+```
+
+### El día a día
+
+Dos procesos a la vez:
 
 ```bash
 npx convex dev     # backend: sincroniza esquema y funciones
 npm run dev        # frontend: http://localhost:3000
 ```
+
+O los dos de golpe: `npm run dev:all`.
 
 La primera vez, entra en `/login` y usa **"Crear la primera cuenta"** para darte
 de alta como Dueña. Ese enlace es andamio temporal: desaparece cuando
@@ -62,7 +95,10 @@ resuelva cómo se invita a alguien al equipo.
 | Comando | Qué hace |
 | --- | --- |
 | `npm run dev` | Servidor de desarrollo de Next |
+| `npm run dev:all` | Convex y Next a la vez |
 | `npx convex dev` | Sincroniza el backend y observa cambios |
+| `npm run convex:key` | Genera la deploy key de desarrollo en `.env.local` |
+| `npm run convex:key:prod` | Genera la deploy key de producción, para Railway |
 | `npm run build` | Compilación de producción |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript sin emitir |
@@ -148,8 +184,15 @@ gh repo create vibe-crm --private --source=. --push
 
 ### Convex (producción)
 
-En [dashboard.convex.dev](https://dashboard.convex.dev), en el proyecto:
-**Settings → Deploy Keys → Generate Production Deploy Key**. Cópiala.
+Genera la clave de producción, que es **distinta** de la de desarrollo que
+usa tu `.env.local`:
+
+```bash
+npm run convex:key:prod
+```
+
+También se puede desde el panel: **Settings → Deploy Keys → Generate Production
+Deploy Key**. Esta clave va solo en Railway, nunca en el repositorio.
 
 ### Railway
 

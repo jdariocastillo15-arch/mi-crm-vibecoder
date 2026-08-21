@@ -9,11 +9,13 @@
   "scripts": {
     "dev": "next dev",
     "dev:convex": "convex dev",
-    "dev:all": "npm run dev:convex -- --run-sh 'npm run dev'",
+    "dev:all": "convex dev --start 'npm run dev'",
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "convex:key": "convex deployment token create vibe-crm-dev --save-env",
+    "convex:key:prod": "convex deployment token create railway --prod"
   },
   "dependencies": {
     "@auth/core": "^0.41.1",
