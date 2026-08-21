@@ -7,7 +7,7 @@
  * Las claves de firma (`JWT_PRIVATE_KEY` y `JWKS`) SÍ hay que generarlas una
  * vez por despliegue, con `npx @convex-dev/auth`. Sin ellas el login falla.
  */
-export default {
+const authConfig = {
   providers: [
     {
       domain: process.env.CONVEX_SITE_URL,
@@ -15,3 +15,5 @@ export default {
     },
   ],
 };
+
+export default authConfig;
