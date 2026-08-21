@@ -1,0 +1,169 @@
+# Vibe CRM
+
+CRM web responsive (PWA) en español para un negocio pequeño de ventas digitales.
+Móvil-primero. Lo usan **Marta** (dueña) y **Carlos** (atención y ventas), y
+existe para una sola cosa: que no se pierdan ventas por falta de seguimiento.
+
+**Next.js · React · Tailwind CSS v4 · Convex · Railway**
+
+---
+
+## Antes de tocar código
+
+Estas tres fuentes mandan, en este orden:
+
+| Qué | Dónde |
+| --- | --- |
+| **Requisitos de producto** | [CRM - PRD](https://app.notion.com/p/3b2c808ed5e680288c81efb0096ff0d3) en Notion |
+| **Design system** | [design](https://app.notion.com/p/3bbc808ed5e6806bbf1af3e26902294c) en Notion |
+| **Prototipo de todas las pantallas** | `DESING/design_handoff_crm_pwa/CRM Shell.dc.html` |
+| **Tareas** | Linear → proyecto **CRM MVP**, fases `Impl. 1` a `Impl. 8` |
+
+El prototipo es **referencia de comportamiento y estilo, no código que portar**:
+está construido sobre un runtime de previsualización propietario. Cada issue de
+Linear trae una tabla "Dónde está el diseño" con el fichero y las **líneas
+exactas** que tiene que reproducir.
+
+> Las tareas de las fases `Fase 0` a `Fase 4` de Linear son **histórico**. Varias
+> describen un producto que el diseño cambió (había un pipeline kanban y un
+> catálogo de productos que ya no existen). Llevan un aviso al principio.
+
+---
+
+## Arrancar en local
+
+Hace falta Node 22 o superior.
+
+```bash
+npm install
+
+# Una sola vez: crea el proyecto en Convex y escribe el .env.local.
+# Abre el navegador para iniciar sesión en Convex.
+npx convex dev
+```
+
+Ese primer `npx convex dev` deja `NEXT_PUBLIC_CONVEX_URL` y `CONVEX_DEPLOYMENT`
+en un `.env.local` que **no se sube al repositorio**.
+
+A partir de ahí hacen falta **dos procesos a la vez**, en dos terminales:
+
+```bash
+npx convex dev     # backend: sincroniza esquema y funciones
+npm run dev        # frontend: http://localhost:3000
+```
+
+La primera vez, entra en `/login` y usa **"Crear la primera cuenta"** para darte
+de alta como Dueña. Ese enlace es andamio temporal: desaparece cuando
+[JES-69](https://linear.app/jesus-dario-castillo-betacourt/issue/JES-69/overlay-anadir-usuario-editar-usuario)
+resuelva cómo se invita a alguien al equipo.
+
+### Comandos
+
+| Comando | Qué hace |
+| --- | --- |
+| `npm run dev` | Servidor de desarrollo de Next |
+| `npx convex dev` | Sincroniza el backend y observa cambios |
+| `npm run build` | Compilación de producción |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript sin emitir |
+
+---
+
+## Cómo está organizado
+
+```
+app/
+  layout.tsx            Fuentes, metadatos, providers de Convex Auth
+  globals.css           TODO el design system: tokens, modo oscuro, animaciones
+  login/                Inicio de sesión (JES-46) — ya funciona
+  (app)/                Pantallas con sesión, dentro del armazón
+    hoy/  clientes/  clientes/[id]/  ventas/  equipo/  cuenta/
+components/
+  ui/                   Los primitivos del design system
+  shell/                Navegación adaptativa y barra superior
+convex/
+  schema.ts             Las cinco entidades del PRD
+  auth.ts               Email y contraseña, con el rol en el alta
+  clientes.ts  seguimientos.ts  interacciones.ts  ventas.ts  users.ts
+  helpers.ts            requireUser / requirePropietaria y utilidades de fecha
+lib/
+  constants.ts          Vocabulario de la interfaz: estados, canales, avisos
+  format.ts             Euros, fechas relativas, iniciales
+  seguimientos.ts       Clasificación en Atrasados / Para hoy / Próximas
+DESING/                 El paquete de diseño. No se toca: es la referencia.
+```
+
+### Los tokens
+
+`app/globals.css` define el design system con **los mismos nombres semánticos que
+usa el prototipo**, para poder leer `CRM Shell.dc.html` y traducirlo sin traducir
+además los nombres. Se convierten en utilidades de Tailwind:
+
+| Token | Utilidad |
+| --- | --- |
+| `--color-primary` | `bg-primary` `text-primary` `border-primary` |
+| `--color-surface` `--color-surface-2` | `bg-surface` `bg-surface-2` |
+| `--color-text` `--color-text-muted` `--color-text-subtle` | `text-text` `text-text-muted` `text-text-subtle` |
+| `--color-success` `-bg` `-text` | `bg-success-bg` `text-success-text` |
+| `--radius-md` (6px) `--radius-xl` (10px) | `rounded-md` `rounded-xl` |
+| `--shadow-xs` | `shadow-xs` |
+
+**Ningún color, sombra, radio o espaciado debe escribirse a pelo en un
+componente.** Si algo no cambia al activar el modo oscuro, es que no usa un token.
+
+Modo oscuro: `<html data-theme="dark">`. Redefine solo los semánticos, así que
+ningún componente necesita saber en qué modo está.
+
+---
+
+## Decisiones que ya están tomadas
+
+Vienen del PRD, sección "Cabos sueltos". Están así a propósito:
+
+- **Las fechas de calendario se guardan como texto `YYYY-MM-DD`**, no como marca
+  de tiempo. Un seguimiento vence "el día 27", no "el 27 a las 00:00 de una zona
+  horaria": guardarlo como fecha evita que cambie de sección según dónde esté
+  quien lo mira.
+- **La autoría se guarda por identificador de usuario**, nunca por nombre. Si
+  Marta cambia su nombre en "Mi cuenta", su historial la sigue reconociendo.
+- **El estado del cliente se guarda con su nombre de negocio** (`nuevo_lead`,
+  `ganado`…), no con el del color. El color es presentación.
+- **El buscador de clientes filtra en el cliente, no en el servidor.** A la
+  escala de este producto es lo correcto, y es lo único que permite filtrar
+  según se escribe. Si la lista crece de verdad, ahí entra un índice de búsqueda.
+- **Las protecciones de borrado de usuarios se comprueban en el servidor**
+  (`convex/users.ts`). Ocultar un botón no es una regla de seguridad.
+
+---
+
+## Publicar
+
+### GitHub
+
+```bash
+git add .
+git commit -m "Scaffold inicial"
+gh repo create vibe-crm --private --source=. --push
+```
+
+### Convex (producción)
+
+En [dashboard.convex.dev](https://dashboard.convex.dev), en el proyecto:
+**Settings → Deploy Keys → Generate Production Deploy Key**. Cópiala.
+
+### Railway
+
+Crea el servicio desde el repositorio de GitHub y añade **una sola variable**:
+
+| Variable | Valor |
+| --- | --- |
+| `CONVEX_DEPLOY_KEY` | La clave de producción de Convex |
+
+`railway.json` ya trae el resto. El build ejecuta
+`npx convex deploy --cmd 'npm run build'`, que despliega las funciones de Convex
+a producción **y** compila Next con la `NEXT_PUBLIC_CONVEX_URL` correcta ya
+inyectada. Por eso esa variable no hay que configurarla a mano.
+
+Después del primer despliegue, en Convex → Settings → Environment Variables del
+despliegue de **producción**, pon `SITE_URL` con el dominio que te dé Railway.
+Convex Auth lo necesita para las redirecciones.

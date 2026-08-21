@@ -1,0 +1,42 @@
+{
+  "name": "vibe-crm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CRM móvil-primero (PWA) para un negocio pequeño de ventas digitales",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "dev:convex": "convex dev",
+    "dev:all": "npm run dev:convex -- --run-sh 'npm run dev'",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3000}",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@auth/core": "^0.41.1",
+    "@convex-dev/auth": "^0.0.95",
+    "convex": "^1.44.0",
+    "lucide-react": "^1.33.0",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "eslint": "^10.8.1",
+    "eslint-config-next": "^16.3.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.27.0": true,
+    "unrs-resolver@1.12.2": true
+  }
+}
