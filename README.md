@@ -74,6 +74,22 @@ propia del repo y ya quedas aislado:
 npm run convex:key        # escribe CONVEX_DEPLOY_KEY en .env.local
 ```
 
+### Sobre el servidor MCP de Convex
+
+Convex trae un servidor MCP (`npx convex mcp start`) que expone el despliegue a
+herramientas de IA. **Este repositorio no lo usa**, y es una decisión, no un
+olvido: el servidor MCP exige la sesión de cuenta global (`~/.convex/config.json`)
+y **no acepta la deploy key del repositorio**. Probado: devuelve
+`Not Authorized` incluso con `CONVEX_DEPLOY_KEY` en el entorno.
+
+Usarlo obligaría a crear la credencial compartida que este repositorio existe
+para evitar. Y no hace falta: el CLI da el mismo acceso con la clave propia —
+`npx convex data`, `npx convex run`, `npx convex logs`, `npx convex env list`.
+
+Si algún día prefieres la comodidad del MCP sobre el aislamiento, basta con
+`npx convex login` y añadir un `.mcp.json` con
+`{"mcpServers":{"convex":{"command":"npx","args":["convex","mcp","start","--project-dir","."]}}}`.
+
 ### El día a día
 
 Dos procesos a la vez:
