@@ -33,20 +33,30 @@ function Envoltura({
   label,
   error,
   helper,
+  accion,
   children,
 }: {
   id: string;
   label?: string;
   error?: string | null;
   helper?: string;
+  /** Control opcional a la derecha de la etiqueta, como "+ Nuevo cliente". */
+  accion?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      {label && (
-        <label htmlFor={id} className="text-sm font-medium text-text">
-          {label}
-        </label>
+      {(label || accion) && (
+        <div className="flex min-h-6 items-center justify-between gap-2">
+          {label ? (
+            <label htmlFor={id} className="text-sm font-medium text-text">
+              {label}
+            </label>
+          ) : (
+            <span />
+          )}
+          {accion}
+        </div>
       )}
       {children}
       {error ? (
@@ -127,12 +137,26 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
   label?: string;
   error?: string | null;
   helper?: string;
+  /**
+   * Control a la derecha de la etiqueta. Lo pide "Nueva tarea" (JES-59), que
+   * lleva un "+ Nuevo cliente" junto a "Cliente". Va aquí en vez de en un
+   * control a medida para no volver a cablear `htmlFor` y `aria-describedby`.
+   */
+  accion?: ReactNode;
 }
 
-export function Select({ label, error, helper, className, children, ...props }: SelectProps) {
+export function Select({
+  label,
+  error,
+  helper,
+  accion,
+  className,
+  children,
+  ...props
+}: SelectProps) {
   const id = useId();
   return (
-    <Envoltura id={id} label={label} error={error} helper={helper}>
+    <Envoltura id={id} label={label} error={error} helper={helper} accion={accion}>
       <div className="relative">
         <select
           id={id}

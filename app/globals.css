@@ -56,6 +56,9 @@
   --color-text-muted: #656c75;
   --color-text-subtle: #868d96;
   --color-focus: #16a34a;
+  /* Velo de los overlays. Es un color, así que es un token: los componentes no
+     escriben rgba() a pelo ni siquiera para esto. */
+  --color-scrim: rgba(16, 24, 32, 0.45);
 
   /* ---- Semánticos: estado (fg / bg / text) ---- */
   --color-success: #15803d;
@@ -164,6 +167,7 @@
   --color-text-muted: #9ba1a8;
   --color-text-subtle: #71777e;
   --color-focus: #4ade80;
+  --color-scrim: rgba(0, 0, 0, 0.6);
 
   --color-success: #4ade80;
   --color-success-bg: rgba(34, 197, 94, 0.14);
@@ -187,6 +191,12 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+  }
+
+  /* El velo del <dialog> nativo. No se puede pintar desde el componente:
+     ::backdrop vive fuera del árbol, así que la regla va aquí (JES-43). */
+  dialog::backdrop {
+    background: var(--color-scrim);
   }
 
   body {
