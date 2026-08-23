@@ -1,7 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { canalOrigen, estadoCliente } from "./schema";
-import { requireUser, hoy } from "./helpers";
+import { requireUser, hoy, esEmailValido } from "./helpers";
 
 /**
  * Clientes — implementa JES-50, JES-52 y JES-54.
@@ -50,6 +50,10 @@ export const crear = mutation({
     if (telefono.length === 0 && email.length === 0) {
       throw new Error("Indica al menos un teléfono o un email");
     }
+    // "Al menos un email" no vale de nada si el email es "asdf".
+    if (email.length > 0 && !esEmailValido(email)) {
+      throw new Error("Ese email no es válido");
+    }
 
     const fecha = hoy();
     return await ctx.db.insert("clientes", {
@@ -84,11 +88,21 @@ export const actualizar = mutation({
     const nombre = campos.nombre.trim();
     if (nombre.length === 0) throw new Error("Añade un nombre");
 
+    const email = campos.email?.trim() || "";
+    // Solo se valida si el email CAMBIA. Si no, una ficha antigua con un email
+    // inválido quedaría bloqueada para todo lo demás: cambiar un teléfono o el
+    // estado fallaría por un dato que quien edita ni ha tocado.
+    const anterior = await ctx.db.get(clienteId);
+    const emailCambia = email !== (anterior?.email ?? "");
+    if (emailCambia && email.length > 0 && !esEmailValido(email)) {
+      throw new Error("Ese email no es válido");
+    }
+
     await ctx.db.patch(clienteId, {
       nombre,
       empresa: campos.empresa?.trim() || undefined,
       telefono: campos.telefono?.trim() || undefined,
-      email: campos.email?.trim() || undefined,
+      email: email || undefined,
       canal: campos.canal,
       nota: campos.nota?.trim() || undefined,
       estado: campos.estado,

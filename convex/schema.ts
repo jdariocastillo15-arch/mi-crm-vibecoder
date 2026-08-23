@@ -101,6 +101,13 @@ export default defineSchema({
     /** YYYY-MM-DD. Se pone al completarlo y se borra al deshacer. */
     fechaHecho: v.optional(v.string()),
     responsableId: v.id("users"),
+    /**
+     * Quién lo cerró, que no tiene por qué ser el responsable: en "Hoy" se ven
+     * los pendientes de todo el equipo y cualquiera puede tachar lo que ya está
+     * hecho. Se guarda por dos motivos: el historial del cliente lo muestra
+     * (JES-58), y "Deshacer" solo se lo permite a quien lo cerró.
+     */
+    completadoPorId: v.optional(v.id("users")),
   })
     .index("by_cliente", ["clienteId"])
     .index("by_hecho_vence", ["hecho", "vence"])
