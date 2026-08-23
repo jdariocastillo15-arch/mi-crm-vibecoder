@@ -15,15 +15,17 @@ import { esEmailValido } from "@/lib/format";
  *
  * Los errores solo aparecen tras el primer intento de enviar, no mientras se
  * escribe: validar cada tecla es hostil con quien todavía está escribiendo.
+ *
+ * Aquí NO se crean cuentas. Las crea la Dueña desde la pantalla de Equipo
+ * (JES-69). El registro está cerrado en el servidor, en `convex/auth.ts`; esta
+ * pantalla simplemente no ofrece lo que ya no se puede hacer.
  */
 export default function LoginPage() {
   const { signIn } = useAuthActions();
   const router = useRouter();
 
-  const [modo, setModo] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [nombre, setNombre] = useState("");
   const [verPassword, setVerPassword] = useState(false);
   const [intentado, setIntentado] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -33,34 +35,19 @@ export default function LoginPage() {
     intentado && !esEmailValido(email) ? "Introduce un email válido" : null;
   const errorPassword =
     intentado && password.trim().length === 0 ? "Introduce tu contraseña" : null;
-  const errorNombre =
-    intentado && modo === "signUp" && nombre.trim().length === 0
-      ? "Indica un nombre"
-      : null;
-
   async function onSubmit(evento: FormEvent) {
     evento.preventDefault();
     setIntentado(true);
     setError(null);
 
     if (!esEmailValido(email) || password.trim().length === 0) return;
-    if (modo === "signUp" && nombre.trim().length === 0) return;
 
     setCargando(true);
     try {
-      await signIn("password", {
-        email: email.trim(),
-        password,
-        flow: modo,
-        ...(modo === "signUp" ? { name: nombre.trim(), rol: "propietaria" } : {}),
-      });
+      await signIn("password", { email: email.trim(), password, flow: "signIn" });
       router.push("/hoy");
     } catch {
-      setError(
-        modo === "signIn"
-          ? "Email o contraseña incorrectos"
-          : "No se ha podido crear la cuenta. ¿Ya existe ese email?",
-      );
+      setError("Email o contraseña incorrectos");
       setCargando(false);
     }
   }
@@ -76,7 +63,7 @@ export default function LoginPage() {
         <div className="flex flex-col gap-[18px] rounded-xl border border-border bg-surface px-6 py-7 shadow-sm">
           <div className="flex flex-col gap-1">
             <h1 className="text-xl font-semibold text-text">
-              {modo === "signIn" ? "Inicia sesión" : "Crea tu cuenta"}
+              Inicia sesión
             </h1>
             <p className="text-sm text-text-muted">
               Accede a tu CRM para gestionar clientes y seguimientos.
@@ -93,17 +80,6 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
-            {modo === "signUp" && (
-              <Input
-                label="Nombre"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Nombre y apellidos"
-                autoCapitalize="words"
-                error={errorNombre}
-              />
-            )}
-
             <Input
               label="Email"
               type="email"
@@ -122,7 +98,7 @@ export default function LoginPage() {
               <Input
                 label="Contraseña"
                 type={verPassword ? "text" : "password"}
-                autoComplete={modo === "signIn" ? "current-password" : "new-password"}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -144,32 +120,11 @@ export default function LoginPage() {
             </div>
 
             <Button type="submit" variant="primary" fullWidth loading={cargando}>
-              {modo === "signIn" ? "Entrar" : "Crear cuenta"}
+              Entrar
             </Button>
           </form>
         </div>
 
-        {/*
-          ANDAMIO TEMPORAL — quitar cuando JES-69 resuelva cómo entra por primera
-          vez alguien del equipo (invitación por email o contraseña provisional).
-          De momento hace falta para poder crear la primera Dueña: el diseño no
-          contempla registro, porque da por hecho que las cuentas las crea ella
-          desde la pantalla de Equipo.
-        */}
-        <p className="text-center text-[13px] text-text-muted">
-          {modo === "signIn" ? "¿Todavía no tienes cuenta? " : "¿Ya tienes cuenta? "}
-          <button
-            type="button"
-            onClick={() => {
-              setModo(modo === "signIn" ? "signUp" : "signIn");
-              setIntentado(false);
-              setError(null);
-            }}
-            className="rounded-sm font-medium text-primary underline-offset-2 hover:underline"
-          >
-            {modo === "signIn" ? "Crear la primera cuenta" : "Inicia sesión"}
-          </button>
-        </p>
       </div>
     </main>
   );

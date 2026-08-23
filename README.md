@@ -101,10 +101,38 @@ npm run dev        # frontend: http://localhost:3000
 
 O los dos de golpe: `npm run dev:all`.
 
-La primera vez, entra en `/login` y usa **"Crear la primera cuenta"** para darte
-de alta como Dueña. Ese enlace es andamio temporal: desaparece cuando
-[JES-69](https://linear.app/jesus-dario-castillo-betacourt/issue/JES-69/overlay-anadir-usuario-editar-usuario)
-resuelva cómo se invita a alguien al equipo.
+#### Crear la primera cuenta
+
+**El registro público está cerrado**, y lo está en el servidor
+(`convex/auth.ts`), no escondiendo un botón: `auth:signIn` es una acción
+pública y cualquiera puede llamarla con `flow: "signUp"` sin pasar por la web.
+
+Dar de alta exige un código que vive en la variable `CODIGO_ALTA` **del
+despliegue**. Si esa variable no existe, no hay alta posible — y ese es el
+estado que debe tener producción. Para crear la primera cuenta en tu
+despliegue de desarrollo:
+
+```bash
+npx convex env set CODIGO_ALTA "$(openssl rand -hex 16)"
+npx convex env get CODIGO_ALTA          # cópialo
+
+npx convex run auth:signIn '{"provider":"password","params":{
+  "email":"tu@empresa.com","password":"...","flow":"signUp",
+  "name":"Tu Nombre","rol":"propietaria","codigoAlta":"<el código>"}}'
+
+npx convex env remove CODIGO_ALTA       # y se vuelve a cerrar
+```
+
+Quítalo en cuanto termines: mientras esté puesto, quien lo adivine puede
+crearse una cuenta.
+
+Si la Dueña ya creó el perfil de esa persona desde la pantalla de Equipo, el
+alta **se engancha a ese perfil** en vez de duplicarlo, y el rol es el que ella
+asignó — nunca el que venga en la petición.
+
+Todo esto es provisional hasta
+[JES-69](https://linear.app/jesus-dario-castillo-betacourt/issue/JES-69/overlay-anadir-usuario-editar-usuario),
+que construye el alta desde la pantalla de Equipo.
 
 ### Comandos
 
