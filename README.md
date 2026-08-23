@@ -113,8 +113,8 @@ resuelva cómo se invita a alguien al equipo.
 | `npm run dev` | Servidor de desarrollo de Next |
 | `npm run dev:all` | Convex y Next a la vez |
 | `npx convex dev` | Sincroniza el backend y observa cambios |
-| `npm run convex:key` | Genera la deploy key de desarrollo en `.env.local` |
-| `npm run convex:key:prod` | Genera la deploy key de producción, para Railway |
+| `npm run convex:key` | Deploy key de desarrollo en `.env.local` — **solo con sesión global de Convex** |
+| `npm run convex:key:prod` | Deploy key de producción — **solo con sesión global**; aquí se genera desde el panel |
 | `npm run build` | Compilación de producción |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript sin emitir |
@@ -220,15 +220,45 @@ gh repo edit jdariocastillo15-arch/mi-crm-vibecoder --visibility private
 
 ### Convex (producción)
 
-Genera la clave de producción, que es **distinta** de la de desarrollo que
-usa tu `.env.local`:
+Producción es un despliegue **aparte** del de desarrollo: otra base de datos
+—vacía—, otras variables y otra clave. Hay que crearlo antes de nada.
+
+**1. Créalo.** En [dashboard.convex.dev](https://dashboard.convex.dev), en el
+selector de despliegue de arriba: **Deployments → Production → +**. Mientras no
+exista, no hay ninguna clave de producción que generar.
+
+**2. Genera su clave.** Ya dentro de Production: **Settings → Deploy Keys**.
+Tiene que empezar por `prod:`; si empieza por `dev:`, es que seguías en el
+despliegue de desarrollo. Esta clave va solo en Railway, nunca en el
+repositorio.
+
+> **`npm run convex:key:prod` no funciona en este repositorio.** No es un fallo
+> puntual: crear una deploy key exige una sesión de cuenta, y aquí a propósito
+> solo hay una deploy key en `.env.local`. Una clave de despliegue sirve para
+> desplegar, no para emitir otras claves. Es el precio del aislamiento que
+> describe «Este repositorio tiene su propia conexión a Convex», y el panel es
+> la vía buena.
+
+**3. Dale a producción sus claves de firma.** Este es el paso fácil de olvidar,
+porque sin él **todo compila y la aplicación carga**: simplemente el inicio de
+sesión no funciona, porque Convex Auth no tiene con qué firmar las sesiones.
+Son por despliegue, así que las de desarrollo no sirven.
 
 ```bash
-npm run convex:key:prod
+CONVEX_DEPLOY_KEY='prod:...' npx @convex-dev/auth --prod \
+  --web-server-url https://tu-dominio.up.railway.app
 ```
 
-También se puede desde el panel: **Settings → Deploy Keys → Generate Production
-Deploy Key**. Esta clave va solo en Railway, nunca en el repositorio.
+Eso deja puestas las tres que producción necesita: `JWT_PRIVATE_KEY`, `JWKS` y
+`SITE_URL`. Compruébalo antes de dar nada por bueno — si la lista sale vacía,
+el login está roto:
+
+```bash
+CONVEX_DEPLOY_KEY='prod:...' npx convex env list
+```
+
+(La clave queda en el historial del intérprete. Si te molesta, léela a una
+variable con `read -rs KEY` y usa `CONVEX_DEPLOY_KEY="$KEY"`.)
 
 ### Railway
 
@@ -238,22 +268,39 @@ Crea el servicio desde el repositorio de GitHub y añade **una sola variable**:
 | --- | --- |
 | `CONVEX_DEPLOY_KEY` | La clave de producción de Convex |
 
+**Solo esa.** No pegues ahí tu `.env.local`: `NEXT_PUBLIC_CONVEX_URL` y
+`CONVEX_DEPLOYMENT` las calcula el build, y ponerlas a mano solo sirve para
+apuntar la web publicada al despliegue equivocado sin que nada se queje.
+
 `railway.json` ya trae el resto. El build ejecuta
 `npx convex deploy --cmd 'npm run build'`, que despliega las funciones de Convex
 a producción **y** compila Next con la `NEXT_PUBLIC_CONVEX_URL` correcta ya
 inyectada. Por eso esa variable no hay que configurarla a mano.
 
-**Después del primer despliegue**, en Convex → Settings → Environment Variables
-del despliegue de **producción**, pon `SITE_URL` con el dominio que te dé
-Railway. No es opcional: Convex Auth lo usa para las redirecciones, y sin él el
-inicio de sesión no funciona en producción aunque todo lo demás compile.
+`SITE_URL` la deja puesta el paso 3 de la sección anterior. Si entonces aún no
+sabías el dominio de Railway, vuelve a ese paso ahora con el definitivo.
 
 ### Comprobar que el despliegue está sano
 
 ```bash
-curl -I https://<tu-dominio>.up.railway.app/hoy   # 307 a /login sin sesión
-curl -I https://<tu-dominio>.up.railway.app/login # 200
+D=https://<tu-dominio>.up.railway.app
+curl -I $D/hoy                        # 307 a /login sin sesión
+curl -I $D/login                      # 200
+curl -I $D/icons/icon-192.png         # 200, o la PWA no se instala
 ```
 
-Si `/login` responde 200 pero entrar da error, casi siempre es la `SITE_URL` que
-falta arriba.
+Y que la web publicada apunte al despliegue que crees —esto se equivoca en
+silencio y es lo más caro de descubrir tarde:
+
+```bash
+curl -s $D/login | grep -oE '/_next/static/chunks/[^"]+\.js' | sort -u \
+  | while read c; do curl -s $D$c; done | grep -oE '[a-z0-9-]+\.convex\.cloud' | sort -u
+```
+
+Tiene que salir el despliegue de **producción**. Si sale el de desarrollo, la
+clave de Railway es la equivocada.
+
+**Si `/login` responde 200 pero entrar falla**, mira las variables de
+producción: casi siempre falta el paso 3 de «Convex (producción)». Sin
+`JWT_PRIVATE_KEY` y `JWKS` no hay sesiones que valgan, y sin `SITE_URL` no hay
+redirecciones.
