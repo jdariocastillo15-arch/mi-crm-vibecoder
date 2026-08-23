@@ -192,10 +192,30 @@ Vienen del PRD, sección "Cabos sueltos". Están así a propósito:
 
 ### GitHub
 
+El remoto ya existe y ya está configurado como `origin`:
+
+```
+https://github.com/jdariocastillo15-arch/mi-crm-vibecoder
+```
+
+Railway está enganchado a él, así que **cada envío a `main` despliega**. Con eso
+en mente, subir es:
+
 ```bash
-git add .
-git commit -m "Scaffold inicial"
-gh repo create vibe-crm --private --source=. --push
+git push origin main
+```
+
+> El primer envío tuvo que ir con `--force`: el remoto guardaba una prueba
+> anterior sin relación con este proyecto y su historia no empalmaba con la de
+> aquí. A partir de ahí, envíos normales.
+
+**Este repositorio es público.** No es lo que pedía la nota original de este
+README, y conviene decidirlo a conciencia, porque lo que se sube incluye la
+carpeta `DESING/` entera —el paquete de diseño con su sistema de componentes— y
+las referencias al PRD y a las tareas. Para cambiarlo:
+
+```bash
+gh repo edit jdariocastillo15-arch/mi-crm-vibecoder --visibility private
 ```
 
 ### Convex (producción)
@@ -223,6 +243,17 @@ Crea el servicio desde el repositorio de GitHub y añade **una sola variable**:
 a producción **y** compila Next con la `NEXT_PUBLIC_CONVEX_URL` correcta ya
 inyectada. Por eso esa variable no hay que configurarla a mano.
 
-Después del primer despliegue, en Convex → Settings → Environment Variables del
-despliegue de **producción**, pon `SITE_URL` con el dominio que te dé Railway.
-Convex Auth lo necesita para las redirecciones.
+**Después del primer despliegue**, en Convex → Settings → Environment Variables
+del despliegue de **producción**, pon `SITE_URL` con el dominio que te dé
+Railway. No es opcional: Convex Auth lo usa para las redirecciones, y sin él el
+inicio de sesión no funciona en producción aunque todo lo demás compile.
+
+### Comprobar que el despliegue está sano
+
+```bash
+curl -I https://<tu-dominio>.up.railway.app/hoy   # 307 a /login sin sesión
+curl -I https://<tu-dominio>.up.railway.app/login # 200
+```
+
+Si `/login` responde 200 pero entrar da error, casi siempre es la `SITE_URL` que
+falta arriba.
