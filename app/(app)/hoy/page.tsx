@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { CheckCheck } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -18,7 +19,7 @@ import {
   type FilaSeguimiento,
 } from "@/components/hoy/SeccionSeguimientos";
 import { OverlayNuevaTarea, type BorradorTarea } from "@/components/hoy/OverlayNuevaTarea";
-import { OverlayNuevoCliente } from "@/components/hoy/OverlayNuevoCliente";
+import { OverlayNuevoCliente } from "@/components/clientes/OverlayNuevoCliente";
 import { OverlayPorConstruir } from "@/components/ui/OverlayPorConstruir";
 import { AVISOS } from "@/lib/constants";
 import { fechaLarga, hoy, sumarDias } from "@/lib/format";
@@ -65,6 +66,7 @@ function borradorNuevo(): BorradorTarea {
 export default function HoyPage() {
   const pendientes = useQuery(api.seguimientos.listPendientes);
   const { mostrar, mostrarError } = useToast();
+  const router = useRouter();
 
   const [overlay, setOverlay] = useState<QueOverlay>(null);
   const [borrador, setBorrador] = useState<BorradorTarea>(borradorNuevo);
@@ -151,7 +153,10 @@ export default function HoyPage() {
       setBorrador((b) => ({ ...b, clienteId }));
       setOverlay("tarea");
     } else {
+      // Alta suelta desde la baldosa: se abre la ficha del recién creado, que
+      // es donde se sigue trabajando con él (JES-52).
       setOverlay(null);
+      router.push(`/clientes/${clienteId}`);
     }
     setVolverATarea(false);
   }

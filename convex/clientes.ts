@@ -52,7 +52,7 @@ export const crear = mutation({
     }
     // "Al menos un email" no vale de nada si el email es "asdf".
     if (email.length > 0 && !esEmailValido(email)) {
-      throw new Error("Ese email no es válido");
+      throw new Error("Email no válido");
     }
 
     const fecha = hoy();
@@ -95,7 +95,7 @@ export const actualizar = mutation({
     const anterior = await ctx.db.get(clienteId);
     const emailCambia = email !== (anterior?.email ?? "");
     if (emailCambia && email.length > 0 && !esEmailValido(email)) {
-      throw new Error("Ese email no es válido");
+      throw new Error("Email no válido");
     }
 
     await ctx.db.patch(clienteId, {
