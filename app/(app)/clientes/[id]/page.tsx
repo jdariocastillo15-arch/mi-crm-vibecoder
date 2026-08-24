@@ -1,12 +1,40 @@
-import { PorConstruir } from "@/components/ui/PorConstruir";
+import { Suspense } from "react";
+import { Card } from "@/components/ui/Card";
+import { SkeletonRow } from "@/components/ui/Feedback";
+import { FichaCliente } from "@/components/clientes/FichaCliente";
 
-export default function FichaClientePage() {
+/**
+ * Ruta de la ficha — implementa parte de JES-53.
+ *
+ * Este componente es de servidor y hace una sola cosa: esperar `params`, que en
+ * esta versión de Next es una promesa, y pasar el id al cliente.
+ *
+ * El `<Suspense>` no es decorativo: `FichaCliente` usa `useSearchParams` para
+ * leer `?editar`, y la documentación de Next pide envolver en un límite de
+ * suspense todo componente de cliente que lo use, o el prerenderizado se
+ * arrastra hasta el límite más cercano.
+ */
+export default async function FichaClientePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
   return (
-    <PorConstruir
-      pantalla="Ficha de cliente"
-      descripcion="Cuatro bloques: cabecera con teléfono y email accionables, acciones rápidas, seguimientos pendientes e historial unificado (interacciones + ventas + seguimientos completados, en una sola línea de tiempo)."
-      lineas="líneas 226–309 (marcado) · 1040–1058 (datos) · 959–971 (historial)"
-      issues={["JES-53", "JES-54", "JES-61", "JES-64"]}
-    />
+    <Suspense fallback={<Cargando />}>
+      <FichaCliente clienteId={id} />
+    </Suspense>
+  );
+}
+
+function Cargando() {
+  return (
+    <Card padding={false}>
+      <div className="px-4.5 py-2">
+        <SkeletonRow />
+        <SkeletonRow />
+      </div>
+    </Card>
   );
 }

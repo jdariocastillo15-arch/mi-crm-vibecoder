@@ -19,7 +19,7 @@ import {
 } from "@/components/hoy/SeccionSeguimientos";
 import { OverlayNuevaTarea, type BorradorTarea } from "@/components/hoy/OverlayNuevaTarea";
 import { OverlayNuevoCliente } from "@/components/hoy/OverlayNuevoCliente";
-import { OverlayPorConstruir } from "@/components/hoy/OverlayPorConstruir";
+import { OverlayPorConstruir } from "@/components/ui/OverlayPorConstruir";
 import { AVISOS } from "@/lib/constants";
 import { fechaLarga, hoy, sumarDias } from "@/lib/format";
 import { agruparParaHoy } from "@/lib/seguimientos";

@@ -30,7 +30,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const destinos = destinosPara(me?.rol);
   const pantallaCompleta = esPantallaCompleta(pathname);
-  const titulo = tituloDe(pathname, destinos);
+
+  // El nombre del cliente en la barra sale de la LISTA, no de `clientes.get`.
+  // `get` exige `v.id("clientes")`, así que con un id mal formado en la URL
+  // —`/clientes/foo`— Convex rechazaría el argumento y la barra entraría en
+  // error. Buscando en la lista, un id inexistente simplemente no aparece.
+  // Es la misma consulta que hace la ficha, así que Convex la deduplica.
+  const enFicha = /^\/clientes\/[^/]+$/.test(pathname);
+  const clientes = useQuery(api.clientes.list, enFicha ? {} : "skip");
+  const nombreCliente = enFicha
+    ? clientes?.find((c) => c._id === pathname.split("/")[2])?.nombre
+    : undefined;
+
+  const titulo = tituloDe(pathname, destinos, nombreCliente);
 
   return (
     <div className="flex min-h-dvh bg-bg">
@@ -110,6 +122,21 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Avatar name={me?.name || "?"} size={32} variant="neutral" />
             </Link>
           )}
+
+          {/* El overlay de editar vive en la página, no aquí. En vez de subir
+              el manejador con un contexto, este enlace pone `?editar=1` y la
+              ficha lo lee. Cuando llegue JES-54, ese mismo parámetro abrirá el
+              formulario de verdad. */}
+          {/* Solo si el cliente existe de verdad: editar uno que no está no
+              lleva a ninguna parte. */}
+          {enFicha && nombreCliente && (
+            <Link
+              href={`${pathname}?editar=1`}
+              className="inline-flex h-11 shrink-0 items-center rounded-md border border-transparent bg-transparent px-5 text-[15px] font-medium text-text-muted transition-colors hover:bg-surface-2"
+            >
+              Editar
+            </Link>
+          )}
         </header>
 
         <main className="flex-1 overflow-auto">
@@ -161,8 +188,13 @@ export function Logo({ size = 34 }: { size?: number }) {
   );
 }
 
-function tituloDe(pathname: string, destinos: { href: string; label: string }[]) {
+function tituloDe(
+  pathname: string,
+  destinos: { href: string; label: string }[],
+  nombreCliente?: string,
+) {
   if (pathname === "/cuenta") return "Mi cuenta";
-  if (/^\/clientes\/[^/]+$/.test(pathname)) return "Cliente";
+  // Mientras carga se enseña "Cliente" en vez de dejar la barra vacía.
+  if (/^\/clientes\/[^/]+$/.test(pathname)) return nombreCliente ?? "Cliente";
   return destinos.find((d) => pathname.startsWith(d.href))?.label ?? "Vibe CRM";
 }
