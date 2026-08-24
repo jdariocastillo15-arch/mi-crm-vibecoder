@@ -24,10 +24,14 @@ export function Skeleton({
   );
 }
 
-/** Una fila fantasma de la lista de clientes: círculo de avatar + dos líneas. */
+/**
+ * Una fila fantasma de la lista de clientes: círculo de avatar + dos líneas.
+ * Lleva el mismo borde que separa las filas de verdad, para que la espera tenga
+ * la forma de lo que va a llegar y no salte nada al llegar.
+ */
 export function SkeletonRow() {
   return (
-    <div className="flex items-center gap-3 px-[18px] py-3.5">
+    <div className="flex items-center gap-3 border-b border-border px-[18px] py-3.5 last:border-b-0">
       <Skeleton width={40} height={40} radius={9999} />
       <div className="flex flex-1 flex-col gap-2">
         <Skeleton width="38%" height={13} />

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { ChevronLeft, LogOut } from "lucide-react";
+import { ChevronLeft, LogOut, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { api } from "@/convex/_generated/api";
 import { destinosPara, esPantallaCompleta } from "./nav";
@@ -135,6 +135,23 @@ export function AppShell({ children }: { children: ReactNode }) {
               className="inline-flex h-11 shrink-0 items-center rounded-md border border-transparent bg-transparent px-5 text-[15px] font-medium text-text-muted transition-colors hover:bg-surface-2"
             >
               Editar
+            </Link>
+          )}
+
+          {/* El alta de cliente en escritorio (JES-50). En móvil ese sitio lo
+              ocupa el botón flotante, que dibuja la propia pantalla.
+
+              Mismo puente que "Editar": un enlace a `?nuevo=1` que la lista
+              lee, en vez de un contexto para bajar el manejador hasta aquí. Es
+              un enlace y no un botón, para que sea una sola cosa interactiva y
+              no un botón que navega. */}
+          {pathname === "/clientes" && (
+            <Link
+              href="/clientes?nuevo=1"
+              className="hidden h-11 shrink-0 items-center gap-2 rounded-md border border-transparent bg-primary px-5 text-[15px] font-semibold text-on-primary transition-colors hover:bg-primary-hover active:bg-primary-active md:inline-flex"
+            >
+              <Plus size={18} strokeWidth={1.5} aria-hidden />
+              Nuevo cliente
             </Link>
           )}
         </header>

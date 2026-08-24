@@ -77,9 +77,28 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   error?: string | null;
   helper?: string;
   icon?: ReactNode;
+  /**
+   * Control dentro del campo, pegado al borde derecho: el "X" de limpiar del
+   * buscador de clientes (JES-50).
+   *
+   * Va aquí y no en la pantalla porque quien coloca el botón tiene que reservar
+   * también su hueco, y las dos cosas no pueden vivir separadas. Si el
+   * `padding` lo pusiera la pantalla por `className`, no ganaría de forma
+   * fiable: `cn` es un `join` sin `tailwind-merge`, así que quedarían las dos
+   * clases de `padding-right` y decidiría el orden del CSS.
+   */
+  accionInterior?: ReactNode;
 }
 
-export function Input({ label, error, helper, icon, className, ...props }: InputProps) {
+export function Input({
+  label,
+  error,
+  helper,
+  icon,
+  accionInterior,
+  className,
+  ...props
+}: InputProps) {
   const id = useId();
   return (
     <Envoltura id={id} label={label} error={error} helper={helper}>
@@ -101,10 +120,16 @@ export function Input({ label, error, helper, icon, className, ...props }: Input
             CONTROL_BASE,
             estadoBorde(error),
             "h-12",
-            icon ? "pr-3.5 pl-10" : "px-3.5",
+            icon ? "pl-10" : "pl-3.5",
+            accionInterior ? "pr-12" : "pr-3.5",
             className,
           )}
         />
+        {accionInterior && (
+          <span className="absolute top-1/2 right-1.5 -translate-y-1/2">
+            {accionInterior}
+          </span>
+        )}
       </div>
     </Envoltura>
   );

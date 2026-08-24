@@ -132,6 +132,20 @@ export function soloDigitos(texto: string): string {
   return (texto ?? "").replace(/[^0-9]/g, "");
 }
 
+/**
+ * Texto listo para comparar: minúsculas y sin tildes.
+ *
+ * Buscar "lopez" tiene que encontrar a "López". Quien escribe con una mano en
+ * el móvil no va a poner el acento, y una lista que no aparece se siente como
+ * una lista que no existe. Se separan los diacríticos con NFD y se quitan.
+ */
+export function normalizar(texto: string): string {
+  return (texto ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
 export function esEmailValido(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
