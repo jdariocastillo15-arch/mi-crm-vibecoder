@@ -20,6 +20,7 @@ import {
 } from "@/components/hoy/SeccionSeguimientos";
 import { OverlayNuevaTarea, type BorradorTarea } from "@/components/hoy/OverlayNuevaTarea";
 import { OverlayNuevoCliente } from "@/components/clientes/OverlayNuevoCliente";
+import { OverlayRegistrarInteraccion } from "@/components/clientes/OverlayRegistrarInteraccion";
 import { OverlayPorConstruir } from "@/components/ui/OverlayPorConstruir";
 import { AVISOS } from "@/lib/constants";
 import { fechaLarga, hoy, sumarDias } from "@/lib/format";
@@ -74,6 +75,8 @@ export default function HoyPage() {
   const [volverATarea, setVolverATarea] = useState(false);
   /** Cambia en cada apertura del alta de cliente, para devolverla a limpio. */
   const [aperturaCliente, setAperturaCliente] = useState(0);
+  /** Lo mismo para "Registrar interacción". */
+  const [aperturaInteraccion, setAperturaInteraccion] = useState(0);
 
   const marcarHecho = useMutation(api.seguimientos.marcarHecho).withOptimisticUpdate(
     (localStore, { seguimientoId }) => {
@@ -124,6 +127,7 @@ export default function HoyPage() {
   function abrirAccion(accion: AccionRapida) {
     if (accion === "tarea") setBorrador(borradorNuevo());
     if (accion === "cliente") setAperturaCliente((n) => n + 1);
+    if (accion === "interaccion") setAperturaInteraccion((n) => n + 1);
     setVolverATarea(false);
     setOverlay(accion);
   }
@@ -243,20 +247,22 @@ export default function HoyPage() {
         }}
       />
 
+      {/* Las `key` de los overlays llevan prefijo porque son HERMANOS y sus
+          contadores empiezan los dos en cero: sin él, React vería dos `key="0"`
+          y avisaría de que puede duplicar u omitir uno. */}
       <OverlayNuevoCliente
-        key={aperturaCliente}
+        key={`cliente-${aperturaCliente}`}
         abierto={overlay === "cliente"}
         onCerrar={cerrarCliente}
         onCreado={clienteCreado}
       />
 
-      <OverlayPorConstruir
+      {/* Sin `clienteId`: desde aquí no se sabe de quién es, así que el
+          overlay pregunta. */}
+      <OverlayRegistrarInteraccion
+        key={`interaccion-${aperturaInteraccion}`}
         abierto={overlay === "interaccion"}
         onCerrar={cerrarSi("interaccion")}
-        titulo="Registrar interacción"
-        issue="JES-62"
-        lineas="líneas 540–566"
-        descripcion="Canal, qué se habló y la fecha. Abierto desde aquí trae selector de cliente, y al guardar adelanta la fecha de último contacto."
       />
 
       <OverlayPorConstruir

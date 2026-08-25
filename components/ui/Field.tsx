@@ -140,6 +140,12 @@ export interface TextareaProps
   label?: string;
   error?: string | null;
   helper?: string;
+  /**
+   * Marca este campo como el que recibe el foco al abrir el overlay, en vez del
+   * primero. Lo lee `Overlay`; ver su comentario. Va declarado aquí porque un
+   * componente con props tipadas no acepta `data-*` sueltos.
+   */
+  "data-foco"?: boolean;
 }
 
 export function Textarea({ label, error, helper, className, ...props }: TextareaProps) {

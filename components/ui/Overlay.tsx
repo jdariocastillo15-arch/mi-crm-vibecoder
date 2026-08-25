@@ -92,14 +92,22 @@ export function Overlay({
   // El foco entra en el primer campo, o en el primer botón del pie si no hay
   // campos. No se deja al comportamiento nativo: varía entre navegadores, y sin
   // esto se lo queda el botón de cerrar, que es lo primero del árbol.
+  //
+  // Un formulario puede pedir otro campo marcándolo con `data-foco`: lo necesita
+  // "Registrar interacción" (JES-62), donde el criterio pide la nota y la nota
+  // va la cuarta. Toda búsqueda va acotada al diálogo y al bloque que le toca
+  // —nunca al documento entero— para no acabar enfocando algo de fuera.
   useEffect(() => {
     if (!abierto) return;
     const d = ref.current;
     if (!d) return;
 
-    const campo = d.querySelector<HTMLElement>(
-      "[data-cuerpo] input, [data-cuerpo] select, [data-cuerpo] textarea",
-    );
+    const pedido = d.querySelector<HTMLElement>("[data-cuerpo] [data-foco]");
+    const campo =
+      pedido ??
+      d.querySelector<HTMLElement>(
+        "[data-cuerpo] input, [data-cuerpo] select, [data-cuerpo] textarea",
+      );
     const alternativa = d.querySelector<HTMLElement>("[data-pie] button");
     (campo ?? alternativa)?.focus();
 

@@ -12,6 +12,7 @@ import { OverlayPorConstruir } from "@/components/ui/OverlayPorConstruir";
 import { FichaCabecera } from "./FichaCabecera";
 import { AccionesFicha, type AccionFicha } from "./AccionesFicha";
 import { SeguimientosPendientes } from "./SeguimientosPendientes";
+import { OverlayRegistrarInteraccion } from "./OverlayRegistrarInteraccion";
 import { OverlayEditarCliente } from "./OverlayEditarCliente";
 import { OverlayProgramarSeguimiento } from "./OverlayProgramarSeguimiento";
 
@@ -124,13 +125,12 @@ export function FichaCliente({ clienteId }: { clienteId: string }) {
         clienteId={cliente._id}
       />
 
-      <OverlayPorConstruir
+      {/* El id sale del cliente ya encontrado, no de la URL. */}
+      <OverlayRegistrarInteraccion
+        key={`interaccion-${aperturas}`}
         abierto={overlay === "interaccion"}
         onCerrar={cerrarSi("interaccion")}
-        titulo="Registrar interacción"
-        issue="JES-62"
-        lineas="líneas 540–566"
-        descripcion="Canal, qué se habló y la fecha. Abierto desde la ficha ya sabe de qué cliente es, y al guardar adelanta su fecha de último contacto."
+        clienteId={cliente._id}
       />
 
       <OverlayPorConstruir
