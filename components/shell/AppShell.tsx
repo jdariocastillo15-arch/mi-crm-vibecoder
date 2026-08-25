@@ -125,8 +125,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           {/* El overlay de editar vive en la página, no aquí. En vez de subir
               el manejador con un contexto, este enlace pone `?editar=1` y la
-              ficha lo lee. Cuando llegue JES-54, ese mismo parámetro abrirá el
-              formulario de verdad. */}
+              ficha lo lee para abrir "Editar cliente" (JES-54).
+
+              Que sea un enlace y no un botón tiene premio: como el parámetro
+              es la única fuente de verdad, el botón atrás del móvil cierra el
+              formulario sin más código. */}
           {/* Solo si el cliente existe de verdad: editar uno que no está no
               lleva a ninguna parte. */}
           {enFicha && nombreCliente && (

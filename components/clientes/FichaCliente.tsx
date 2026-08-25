@@ -11,6 +11,7 @@ import { PorConstruir } from "@/components/ui/PorConstruir";
 import { OverlayPorConstruir } from "@/components/ui/OverlayPorConstruir";
 import { FichaCabecera } from "./FichaCabecera";
 import { AccionesFicha, type AccionFicha } from "./AccionesFicha";
+import { OverlayEditarCliente } from "./OverlayEditarCliente";
 import { OverlayProgramarSeguimiento } from "./OverlayProgramarSeguimiento";
 
 /**
@@ -41,6 +42,29 @@ export function FichaCliente({ clienteId }: { clienteId: string }) {
   // Cerrar quitando la query, no con `back()`: si alguien abrió la URL con
   // `?editar=1` directamente, un `back()` lo sacaría de la ficha.
   const cerrarEditar = () => router.replace(pathname);
+
+  // El formulario NO se desmonta al cerrarse: lo necesita montado para que el
+  // <dialog> nativo devuelva el foco a quien lo abrió. Para que aun así cada
+  // apertura recargue los datos ACTUALES —y no lo que se escribió y descartó la
+  // vez anterior, que es literalmente el primer criterio de JES-54— se le
+  // cambia la `key` con un contador que solo avanza al ABRIR.
+  //
+  // Ajustar estado durante el render es el patrón que React documenta para
+  // reaccionar a un cambio de entrada; es el mismo puente que usa la lista de
+  // clientes con `?nuevo=1`. Contador propio y no el de las acciones rápidas,
+  // porque son dos ciclos de vida independientes.
+  //
+  // Las `key` de los dos overlays llevan prefijo porque son HERMANOS, y React
+  // exige que las claves no se repitan entre hermanos: dos contadores que
+  // empiezan en cero daban los dos `key="0"`, y React avisaba de que podía
+  // duplicar u omitir uno de ellos. Con prefijo, además, el día que JES-62 y
+  // JES-65 sustituyan sus marcadores no se vuelve a tropezar con lo mismo.
+  const [editarAntes, setEditarAntes] = useState(editando);
+  const [aperturasEditar, setAperturasEditar] = useState(0);
+  if (editando !== editarAntes) {
+    setEditarAntes(editando);
+    if (editando) setAperturasEditar((n) => n + 1);
+  }
 
   if (clientes === undefined) {
     return (
@@ -89,7 +113,7 @@ export function FichaCliente({ clienteId }: { clienteId: string }) {
       />
 
       <OverlayProgramarSeguimiento
-        key={aperturas}
+        key={`seguimiento-${aperturas}`}
         abierto={overlay === "seguimiento"}
         onCerrar={cerrarSi("seguimiento")}
         clienteId={cliente._id}
@@ -113,13 +137,11 @@ export function FichaCliente({ clienteId }: { clienteId: string }) {
         descripcion="Concepto, importe en euros, estado y fecha. Abierto desde la ficha ya sabe de qué cliente es. Una venta no cuenta como contacto."
       />
 
-      <OverlayPorConstruir
+      <OverlayEditarCliente
+        key={`editar-${aperturasEditar}`}
+        cliente={cliente}
         abierto={editando}
         onCerrar={cerrarEditar}
-        titulo="Editar cliente"
-        issue="JES-54"
-        lineas="líneas 476–514"
-        descripcion="Los mismos campos del alta más el estado del cliente, que solo se puede cambiar desde aquí."
       />
     </div>
   );

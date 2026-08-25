@@ -1,6 +1,8 @@
 "use client";
 
 import { useId, useRef } from "react";
+import { Badge } from "./Badge";
+import type { Tono } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 
 /**
@@ -17,8 +19,22 @@ import { cn } from "@/lib/cn";
  * del que no se puede salir es un `radiogroup`, y uno que se puede vaciar son
  * botones de dos estados. Anunciarlos igual sería mentirle al lector de
  * pantalla.
+ *
+ * Aparte del comportamiento hay dos ASPECTOS, y son un eje independiente. Por
+ * defecto la opción es texto dentro de un recuadro. Si la opción trae `tono`,
+ * se pinta como `Badge` de ese color con un anillo alrededor de la activa: lo
+ * pide el estado de un cliente (JES-54), donde cada valor ya tiene su color y
+ * quitárselo dejaría cinco recuadros idénticos.
+ *
+ * Es solo pintura: los dos modos de arriba no cambian, y una opción sin `tono`
+ * se sigue viendo exactamente igual que antes.
  */
-export type OpcionChip<T extends string> = { valor: T; etiqueta: string };
+export type OpcionChip<T extends string> = {
+  valor: T;
+  etiqueta: string;
+  /** Con tono, la opción se pinta como `Badge` de ese color. Ver arriba. */
+  tono?: Tono;
+};
 
 export function Chips<T extends string>({
   label,
@@ -93,13 +109,34 @@ export function Chips<T extends string>({
                 onChange(activa && permitirVaciar ? null : opcion.valor)
               }
               className={cn(
-                "rounded-md border px-3.5 py-2.5 text-sm font-medium transition-colors",
-                activa
-                  ? "border-primary bg-primary-subtle text-primary"
-                  : "border-border-strong bg-surface text-text-muted hover:bg-surface-2",
+                "transition-colors",
+                opcion.tono
+                  ? cn(
+                      // El borde transparente de las inactivas reserva ya el
+                      // sitio del anillo, para que nada se mueva al elegir.
+                      "rounded-full border-2 p-[3px]",
+                      // El anillo se pinta con `outline` y no con `box-shadow`
+                      // como en el diseño: el foco global ES un `box-shadow`
+                      // (`app/globals.css`), y una utilidad de sombra le gana
+                      // por capa, así que la etiqueta activa se quedaría sin
+                      // anillo de foco justo al enfocarla.
+                      activa
+                        ? "border-primary [outline:1px_solid_var(--color-primary)]"
+                        : "border-transparent",
+                    )
+                  : cn(
+                      "rounded-md border px-3.5 py-2.5 text-sm font-medium",
+                      activa
+                        ? "border-primary bg-primary-subtle text-primary"
+                        : "border-border-strong bg-surface text-text-muted hover:bg-surface-2",
+                    ),
               )}
             >
-              {opcion.etiqueta}
+              {opcion.tono ? (
+                <Badge tono={opcion.tono}>{opcion.etiqueta}</Badge>
+              ) : (
+                opcion.etiqueta
+              )}
             </button>
           );
         })}
