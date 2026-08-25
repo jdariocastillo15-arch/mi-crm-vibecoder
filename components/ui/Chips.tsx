@@ -73,6 +73,8 @@ export function Chips<T extends string>({
   onChange,
   permitirVaciar = false,
   variante = "texto",
+  etiquetaOculta = false,
+  desliza = false,
   error,
 }: {
   label: string;
@@ -83,6 +85,19 @@ export function Chips<T extends string>({
   permitirVaciar?: boolean;
   /** Solo cambia el aspecto de las opciones con `tono`. Ver la tabla de arriba. */
   variante?: VarianteChip;
+  /**
+   * Esconde el rótulo a la vista, pero NO al lector de pantalla: el texto sigue
+   * en el árbol y `aria-labelledby` lo sigue apuntando. Lo pide el filtro de la
+   * pantalla "Ventas" (JES-66), que en el diseño no lleva rótulo encima. Un
+   * grupo de opciones sin nombre accesible no se puede anunciar.
+   */
+  etiquetaOculta?: boolean;
+  /**
+   * La fila se desplaza en horizontal en vez de partirse en varias líneas.
+   * También lo pide el filtro de "Ventas": con cuatro contadores y una pantalla
+   * de móvil, envolver deja la fila en dos alturas distintas según el número.
+   */
+  desliza?: boolean;
   error?: string | null;
 }) {
   const id = useId();
@@ -111,7 +126,15 @@ export function Chips<T extends string>({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span id={`${id}-label`} className="text-sm font-medium text-text">
+      <span
+        id={`${id}-label`}
+        className={cn(
+          "text-sm font-medium text-text",
+          // `sr-only`, no `hidden`: escondido a la vista pero presente para
+          // quien navega con lector de pantalla, que es quien lo necesita.
+          etiquetaOculta && "sr-only",
+        )}
+      >
         {label}
       </span>
 
@@ -119,7 +142,14 @@ export function Chips<T extends string>({
         role={permitirVaciar ? "group" : "radiogroup"}
         aria-labelledby={`${id}-label`}
         aria-describedby={error ? `${id}-error` : undefined}
-        className="flex flex-wrap gap-2"
+        className={cn(
+          "flex gap-2",
+          desliza
+            ? // El relleno de abajo deja sitio al anillo de foco, que si no
+              // quedaría recortado por el propio desplazamiento.
+              "overflow-x-auto pb-0.5"
+            : "flex-wrap",
+        )}
       >
         {opciones.map((opcion, indice) => {
           const activa = opcion.valor === valor;
@@ -145,6 +175,11 @@ export function Chips<T extends string>({
               }
               className={cn(
                 "transition-colors",
+                // Sin esto, en una fila que se desplaza flexbox encoge los
+                // botones para que quepan todos y el desplazamiento nunca
+                // llega a hacer falta: el texto se parte y la fila crece a lo
+                // alto, que es justo lo que el criterio quiere evitar.
+                desliza && "shrink-0 whitespace-nowrap",
                 comoEtiqueta
                   ? cn(
                       // El borde transparente de las inactivas reserva ya el

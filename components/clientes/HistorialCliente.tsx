@@ -8,11 +8,8 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState, Skeleton } from "@/components/ui/Feedback";
-import {
-  ESTADO_VENTA,
-  type CanalInteraccion,
-  type EstadoVenta,
-} from "@/lib/constants";
+import { ESTADO_VENTA, type CanalInteraccion } from "@/lib/constants";
+import { CIRCULO_VENTA, IMPORTE_VENTA } from "@/lib/ventas";
 import { construirHistorial, type EntradaHistorial } from "@/lib/historial";
 import { fechaCorta, fechaRelativa, formatEuros } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -40,26 +37,9 @@ const ICONO_CANAL: Record<CanalInteraccion, LucideIcon> = {
   en_persona: Users,
 };
 
-/**
- * Colores del círculo y del importe, escritos enteros porque Tailwind busca las
- * clases leyendo el fichero.
- *
- * Ojo al importe de una oportunidad abierta: va en color de texto normal, NO en
- * el azul de su etiqueta. Lo dice el diseño (`VENTA_EST.amt`) y tiene sentido:
- * lo que sigue abierto todavía no es ni bueno ni malo, y teñirlo lo contaría
- * como un resultado.
- */
-const CIRCULO_VENTA: Record<EstadoVenta, string> = {
-  abierta: "bg-info-bg text-info",
-  ganada: "bg-success-bg text-success",
-  perdida: "bg-error-bg text-error",
-};
-
-const IMPORTE_VENTA: Record<EstadoVenta, string> = {
-  abierta: "text-text",
-  ganada: "text-success-text",
-  perdida: "text-error-text",
-};
+/* Los colores del círculo y del importe de una venta viven en `lib/ventas.ts`:
+   los usa también el listado de la pantalla "Ventas" (JES-67), y dos copias de
+   un mapa de colores se desvían en cuanto alguien retoca una. */
 
 const FILAS_FANTASMA = [0, 1, 2];
 
