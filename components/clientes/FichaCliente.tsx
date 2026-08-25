@@ -11,6 +11,7 @@ import { PorConstruir } from "@/components/ui/PorConstruir";
 import { OverlayPorConstruir } from "@/components/ui/OverlayPorConstruir";
 import { FichaCabecera } from "./FichaCabecera";
 import { AccionesFicha, type AccionFicha } from "./AccionesFicha";
+import { SeguimientosPendientes } from "./SeguimientosPendientes";
 import { OverlayEditarCliente } from "./OverlayEditarCliente";
 import { OverlayProgramarSeguimiento } from "./OverlayProgramarSeguimiento";
 
@@ -105,11 +106,15 @@ export function FichaCliente({ clienteId }: { clienteId: string }) {
 
       <AccionesFicha onAccion={abrir} />
 
+      {/* El id sale del cliente ya encontrado, no de la URL: `listByCliente`
+          exige `v.id("clientes")` y un id mal formado la haría fallar. */}
+      <SeguimientosPendientes clienteId={cliente._id} />
+
       <PorConstruir
         pantalla="Lo que falta de esta ficha"
-        descripcion="Seguimientos pendientes, y el historial unificado con interacciones, ventas y seguimientos completados en una sola línea de tiempo."
-        lineas="líneas 260–309 (marcado) · 959–971 (historial)"
-        issues={["JES-61", "JES-64"]}
+        descripcion="El historial unificado, con interacciones, ventas y seguimientos completados en una sola línea de tiempo."
+        lineas="líneas 283–305 (marcado) · 959–971 (historial)"
+        issues={["JES-64"]}
       />
 
       <OverlayProgramarSeguimiento

@@ -80,14 +80,35 @@ export const listPendientes = query({
   },
 });
 
+/**
+ * Todos los seguimientos de un cliente, completados incluidos.
+ *
+ * Devuelve también los cerrados a propósito, aunque la tarjeta de pendientes
+ * (JES-61) solo pinte los abiertos: el historial de la ficha (JES-64) necesita
+ * exactamente los otros, y partirlo en dos consultas sería pedir dos veces lo
+ * mismo. Quien pinta, filtra — es lo que hace el diseño.
+ *
+ * Cruza el nombre del responsable por el mismo motivo que `listPendientes`: que
+ * la pantalla no tenga que traerse el equipo entero para escribir una palabra.
+ */
 export const listByCliente = query({
   args: { clienteId: v.id("clientes") },
   handler: async (ctx, { clienteId }) => {
     await requireUser(ctx);
-    return await ctx.db
+
+    const seguimientos = await ctx.db
       .query("seguimientos")
       .withIndex("by_cliente", (q) => q.eq("clienteId", clienteId))
       .collect();
+
+    return await Promise.all(
+      seguimientos.map(async (seguimiento) => {
+        // Puede faltar de verdad: borrar a alguien del equipo deja vivos sus
+        // seguimientos (ver `users.eliminarUsuario` y JES-70).
+        const responsable = await ctx.db.get(seguimiento.responsableId);
+        return { ...seguimiento, responsableNombre: responsable?.name ?? null };
+      }),
+    );
   },
 });
 

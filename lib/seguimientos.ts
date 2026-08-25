@@ -24,6 +24,21 @@ export function textoVencimiento(vence: string, referencia: string = hoy()): str
 }
 
 /**
+ * Los no completados, del vencimiento más próximo al más lejano.
+ *
+ * Lo usan las dos vistas de lo mismo: "Hoy", que agrupa por día a todo el
+ * mundo, y la tarjeta de la ficha, que lo mira por cliente (JES-61). Con una
+ * sola definición no pueden discrepar sobre qué cuenta como pendiente.
+ */
+export function pendientesPorVencimiento<T extends { vence: string; hecho: boolean }>(
+  seguimientos: T[],
+): T[] {
+  return seguimientos
+    .filter((s) => !s.hecho)
+    .sort((a, b) => (a.vence < b.vence ? -1 : a.vence > b.vence ? 1 : 0));
+}
+
+/**
  * Agrupa los pendientes en las tres secciones de "Hoy".
  * Los atrasados van de más antiguo a más reciente; el resto, por fecha ascendente.
  */
@@ -31,9 +46,7 @@ export function agruparParaHoy<T extends { vence: string; hecho: boolean }>(
   seguimientos: T[],
   referencia: string = hoy(),
 ) {
-  const pendientes = seguimientos
-    .filter((s) => !s.hecho)
-    .sort((a, b) => (a.vence < b.vence ? -1 : a.vence > b.vence ? 1 : 0));
+  const pendientes = pendientesPorVencimiento(seguimientos);
 
   const atrasados = pendientes.filter((s) => clasificar(s.vence, referencia) === "atrasado");
   const paraHoy = pendientes.filter((s) => clasificar(s.vence, referencia) === "hoy");
