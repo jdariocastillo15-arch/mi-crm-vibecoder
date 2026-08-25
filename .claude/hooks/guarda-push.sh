@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 #
-# Guarda de push — subir al remoto exige autorización literal del owner.
+# Guarda de publicación — sacar algo a GitHub exige autorización literal del owner.
+#
+# Cubre las dos vías reales:
+#   · `git push`      — sube commits
+#   · `gh` de escritura — abre PR, mergea, comenta, publica releases…
 #
 # Se engancha como hook `PreToolUse` de Bash: ve el comando ANTES de que se
-# ejecute y lo frena si es un push. Frenarlo no es el objetivo; el objetivo es
-# que el asistente PARE, enseñe lo que iba a subir y espere un "go" literal.
+# ejecute y lo frena. Frenarlo no es el objetivo; el objetivo es que el
+# asistente PARE, enseñe lo que iba a salir y espere un "go" literal.
 #
-# La autorización es un vale de un solo uso, atado al commit exacto y con
-# caducidad. Ver `.claude/hooks/README.md` para el alcance real de esta guarda.
+# Ver `.claude/hooks/README.md` para el alcance real de esta guarda.
 
 set -uo pipefail
 
@@ -21,8 +24,11 @@ entrada=$(cat)
 # La primera versión buscaba "git ... push" con una expresión suelta y se comió
 # dos falsos positivos en cinco minutos: un heredoc que MENCIONABA el comando, y
 # un `git checkout -b una-rama-con-push-en-el-nombre`. Así que aquí se hace bien:
-# se parte el comando en trozos y se exige que `push` sea EL SUBCOMANDO, no una
-# palabra que pase por ahí.
+# se trocea el comando y se mira QUÉ SUBCOMANDO es, no qué palabras contiene.
+#
+# Con `gh` el criterio es del lado seguro: lista blanca de verbos de LECTURA y
+# todo lo demás bloquea. Un verbo nuevo que publique no se cuela por no estar
+# previsto; como mucho molesta una lectura, y ampliar la lista es una línea.
 # ---------------------------------------------------------------------------
 veredicto=$(printf '%s' "$entrada" | python3 -c '
 import json, re, sys
@@ -35,54 +41,103 @@ except Exception:
 cmd = datos.get("tool_input", {}).get("command", "") or ""
 
 # Fuera los cuerpos de heredoc: escribir un fichero que MENCIONA el comando no
-# es ejecutarlo. Las comillas NO se limpian, a propósito: un `bash -c "..."`
-# tiene que seguir cayendo en la red.
+# es ejecutarlo.
 cmd = re.sub(r"<<-?\s*[\x27\"]?(\w+)[\x27\"]?.*?^\s*\1\s*$", " ", cmd, flags=re.S | re.M)
 
-# Opciones globales de git que se comen el siguiente argumento.
-CON_VALOR = {"-C", "-c", "--exec-path", "--git-dir", "--work-tree", "--namespace"}
+# Opciones globales que se comen el siguiente argumento.
+GIT_CON_VALOR = {"-C", "-c", "--exec-path", "--git-dir", "--work-tree", "--namespace"}
+GH_CON_VALOR  = {"-R", "--repo", "--hostname"}
 
-def es_push(trozo):
-    piezas = trozo.split()
-    if not piezas:
-        return False
-    ejecutable = piezas[0].rsplit("/", 1)[-1]
-    if ejecutable == "git-push":
-        return True
-    if ejecutable != "git":
-        return False
-    i = 1
+# Verbos de `gh` que solo LEEN. Todo lo que no esté aquí se considera escritura.
+GH_LECTURA = {
+    "list", "view", "status", "diff", "checks", "checkout", "search",
+    "browse", "download", "clone", "watch", "logs", "help", "version",
+    "completion",
+}
+
+# `gh api` sin estas señales es un GET.
+API_ESCRIBE = {"-X", "--method", "-f", "-F", "--field", "--raw-field", "--input"}
+METODOS_ESCRITURA = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def sin_opciones(piezas, con_valor):
+    """Tokens que no son opciones, en orden."""
+    fuera, i = [], 0
     while i < len(piezas):
         p = piezas[i]
-        if p in CON_VALOR:
+        if p in con_valor:
             i += 2
             continue
         if p.startswith("-"):
             i += 1
             continue
-        break                      # primer token que no es opción: el subcomando
-    return i < len(piezas) and piezas[i] == "push"
+        fuera.append(p)
+        i += 1
+    return fuera
+
+
+def motivo(trozo):
+    piezas = trozo.split()
+    if not piezas:
+        return None
+    ejecutable = piezas[0].rsplit("/", 1)[-1]
+
+    # ---- git ----
+    if ejecutable == "git-push":
+        return "git push"
+    if ejecutable == "git":
+        resto = sin_opciones(piezas[1:], GIT_CON_VALOR)
+        if resto and resto[0] == "push":
+            return "git push"
+        return None
+
+    # ---- gh ----
+    if ejecutable == "gh":
+        resto = sin_opciones(piezas[1:], GH_CON_VALOR)
+        if not resto:
+            return None                       # `gh` a secas imprime la ayuda
+
+        if resto[0] == "api":
+            for i, p in enumerate(piezas):
+                if p in ("-X", "--method"):
+                    if i + 1 < len(piezas) and piezas[i + 1].upper() in METODOS_ESCRITURA:
+                        return "gh api " + piezas[i + 1].upper()
+                elif p.split("=")[0] in API_ESCRIBE:
+                    return "gh api con campos"
+            return None                       # GET
+
+        # `gh <grupo> <verbo>` o `gh <verbo>`
+        if any(t in GH_LECTURA for t in resto[:2]):
+            return None
+        return "gh " + " ".join(resto[:2])
+
+    return None
+
 
 # Un --dry-run no escribe en el remoto.
 if "--dry-run" in cmd:
     print("no"); sys.exit(0)
 
-# Se examina el comando entero Y, aparte, el contenido de cada cadena
-# entrecomillada: ahí es donde se esconde un `bash -c "git push"`, que de otro
-# modo pasa porque su primer token es `bash`.
+# Se examina el comando entero Y el contenido de cada cadena entrecomillada:
+# ahí se esconde un `bash -c "git push"`, que si no pasa porque su primer token
+# es `bash`.
 candidatos = [cmd]
 candidatos += re.findall(r"\x27([^\x27]*)\x27", cmd)
 candidatos += re.findall(r"\"([^\"]*)\"", cmd)
 
 for texto in candidatos:
     for trozo in re.split(r"[;&|\n]+", texto):
-        if es_push(trozo.strip()):
-            print("si"); sys.exit(0)
+        m = motivo(trozo.strip())
+        if m:
+            print("si|" + m); sys.exit(0)
 
 print("no")
 ' 2>/dev/null)
 
-[ "$veredicto" = "si" ] || exit 0
+case "$veredicto" in
+  si\|*) que="${veredicto#si|}" ;;
+  *)     exit 0 ;;
+esac
 
 raiz=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 vale="$raiz/.claude/push-autorizado"
@@ -95,7 +150,7 @@ if [ -f "$vale" ]; then
 
   if [ "$autorizado" = "$sha" ] && [ -n "$reciente" ]; then
     rm -f "$vale"                       # de un solo uso
-    echo "Vale de push consumido para ${sha:0:7}." >&2
+    echo "Vale consumido para ${sha:0:7} · $que" >&2
     exit 0
   fi
 
@@ -103,26 +158,26 @@ if [ -f "$vale" ]; then
 
   if [ "$autorizado" != "$sha" ]; then
     cat >&2 <<FIN
-BLOQUEADO — el vale no corresponde a este commit.
+BLOQUEADO ($que) — el vale no corresponde a este commit.
 
   Vale emitido para : ${autorizado:0:7}
   HEAD actual       : ${sha:0:7}
 
 Han entrado commits nuevos desde que se autorizó. Se autorizó ESE diff, no el
-de ahora: hay que volver a enseñar lo que se sube y pedir permiso otra vez.
+de ahora: hay que volver a enseñar lo que sale y pedir permiso otra vez.
 FIN
     exit 2
   fi
 
   cat >&2 <<FIN
-BLOQUEADO — el vale ha caducado (más de $MINUTOS_VALIDO minutos).
+BLOQUEADO ($que) — el vale ha caducado (más de $MINUTOS_VALIDO minutos).
 
 Vuelve a enseñar lo pendiente y pide autorización otra vez.
 FIN
   exit 2
 fi
 
-# ---- Sin vale: parar y contar qué se iba a subir ----
+# ---- Sin vale: parar y contar qué se iba a publicar ----
 rama=$(git -C "$raiz" rev-parse --abbrev-ref HEAD 2>/dev/null)
 upstream=$(git -C "$raiz" rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)
 
@@ -141,31 +196,32 @@ resumen=$(git -C "$raiz" diff --stat "$rango" 2>/dev/null | tail -25)
 sucio=$(git -C "$raiz" status --short 2>/dev/null | head -10)
 
 {
-  echo "BLOQUEADO — subir al remoto requiere autorización literal del owner."
+  echo "BLOQUEADO — publicar en GitHub requiere autorización literal del owner."
   echo
-  echo "Rama: $rama  ($origen)"
+  echo "Operación frenada: $que"
+  echo "Rama:              $rama  ($origen)"
   echo
-  echo "COMMITS PENDIENTES DE SUBIR ($recuento):"
+  echo "COMMITS PENDIENTES ($recuento):"
   echo "${commits:-  (ninguno)}"
   echo
-  echo "DIFF QUE SE SUBIRÍA:"
+  echo "DIFF QUE SALDRÍA:"
   echo "${resumen:-  (sin cambios)}"
   if [ -n "$sucio" ]; then
     echo
-    echo "AVISO — hay cambios sin commitear que NO se subirían:"
+    echo "AVISO — hay cambios sin commitear que NO saldrían:"
     echo "$sucio"
   fi
   cat <<'FIN'
 
 QUÉ TIENE QUE HACER EL ASISTENTE AHORA:
 
-  1. PARAR. No reintentar ni buscar otra vía para llegar al remoto.
+  1. PARAR. No reintentar ni buscar otra vía para llegar a GitHub.
   2. Enseñar al owner los commits y el diff de arriba.
   3. Pedir autorización y ESPERAR una respuesta literal:
      "push" · "sube" · "go push" · o equivalente inequívoco.
 
   Un "adelante", un "vale" o un "sigue" dichos sobre otra cosa NO valen.
-  Si no llega esa palabra, no se sube.
+  Si no llega esa palabra, no sale nada.
 
   Con el go literal en la mano se emite el vale —el SHA de HEAD escrito en
   `.claude/push-autorizado`— y se repite la operación. Un solo uso, caduca en
