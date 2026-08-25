@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#
+# Segunda capa: frena el push aunque no venga del asistente —terminal a mano,
+# botón del editor, script—. Comparte el mismo vale que la guarda de Claude.
+#
+# Se activa con:  git config core.hooksPath .githooks
+
+set -uo pipefail
+
+MINUTOS_VALIDO=15
+
+raiz=$(git rev-parse --show-toplevel) || exit 0
+vale="$raiz/.claude/push-autorizado"
+sha=$(git rev-parse HEAD)
+
+if [ -f "$vale" ]; then
+  autorizado=$(head -n1 "$vale" | tr -d '[:space:]')
+  reciente=$(find "$vale" -mmin "-$MINUTOS_VALIDO" 2>/dev/null)
+  if [ "$autorizado" = "$sha" ] && [ -n "$reciente" ]; then
+    rm -f "$vale"
+    exit 0
+  fi
+  rm -f "$vale"
+fi
+
+cat >&2 <<FIN
+
+  ✗ Push bloqueado — requiere autorización literal del owner.
+
+    HEAD: ${sha:0:7}  ·  rama: $(git rev-parse --abbrev-ref HEAD)
+
+    Si eres el owner y quieres subirlo, emite el vale y repite el push:
+
+        printf '%s' "\$(git rev-parse HEAD)" > .claude/push-autorizado
+        git push ...
+
+    Un solo uso, caduca en $MINUTOS_VALIDO minutos, atado a este commit.
+
+FIN
+exit 1
