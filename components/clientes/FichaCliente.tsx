@@ -7,12 +7,12 @@ import { UserX } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Card } from "@/components/ui/Card";
 import { EmptyState, SkeletonRow } from "@/components/ui/Feedback";
-import { PorConstruir } from "@/components/ui/PorConstruir";
-import { OverlayPorConstruir } from "@/components/ui/OverlayPorConstruir";
 import { FichaCabecera } from "./FichaCabecera";
 import { AccionesFicha, type AccionFicha } from "./AccionesFicha";
 import { SeguimientosPendientes } from "./SeguimientosPendientes";
+import { HistorialCliente } from "./HistorialCliente";
 import { OverlayRegistrarInteraccion } from "./OverlayRegistrarInteraccion";
+import { OverlayRegistrarVenta } from "./OverlayRegistrarVenta";
 import { OverlayEditarCliente } from "./OverlayEditarCliente";
 import { OverlayProgramarSeguimiento } from "./OverlayProgramarSeguimiento";
 
@@ -56,11 +56,11 @@ export function FichaCliente({ clienteId }: { clienteId: string }) {
   // clientes con `?nuevo=1`. Contador propio y no el de las acciones rápidas,
   // porque son dos ciclos de vida independientes.
   //
-  // Las `key` de los dos overlays llevan prefijo porque son HERMANOS, y React
+  // Las `key` de los overlays llevan prefijo porque son HERMANOS, y React
   // exige que las claves no se repitan entre hermanos: dos contadores que
   // empiezan en cero daban los dos `key="0"`, y React avisaba de que podía
-  // duplicar u omitir uno de ellos. Con prefijo, además, el día que JES-62 y
-  // JES-65 sustituyan sus marcadores no se vuelve a tropezar con lo mismo.
+  // duplicar u omitir uno de ellos. Ahora son cuatro hermanos y el prefijo es
+  // lo único que los distingue.
   const [editarAntes, setEditarAntes] = useState(editando);
   const [aperturasEditar, setAperturasEditar] = useState(0);
   if (editando !== editarAntes) {
@@ -111,12 +111,8 @@ export function FichaCliente({ clienteId }: { clienteId: string }) {
           exige `v.id("clientes")` y un id mal formado la haría fallar. */}
       <SeguimientosPendientes clienteId={cliente._id} />
 
-      <PorConstruir
-        pantalla="Lo que falta de esta ficha"
-        descripcion="El historial unificado, con interacciones, ventas y seguimientos completados en una sola línea de tiempo."
-        lineas="líneas 283–305 (marcado) · 959–971 (historial)"
-        issues={["JES-64"]}
-      />
+      {/* Mismo motivo que arriba para el id: sale del cliente ya encontrado. */}
+      <HistorialCliente clienteId={cliente._id} />
 
       <OverlayProgramarSeguimiento
         key={`seguimiento-${aperturas}`}
@@ -133,13 +129,12 @@ export function FichaCliente({ clienteId }: { clienteId: string }) {
         clienteId={cliente._id}
       />
 
-      <OverlayPorConstruir
+      {/* El id sale del cliente ya encontrado, no de la URL. */}
+      <OverlayRegistrarVenta
+        key={`venta-${aperturas}`}
         abierto={overlay === "venta"}
         onCerrar={cerrarSi("venta")}
-        titulo="Registrar venta"
-        issue="JES-65"
-        lineas="líneas 567–600"
-        descripcion="Concepto, importe en euros, estado y fecha. Abierto desde la ficha ya sabe de qué cliente es. Una venta no cuenta como contacto."
+        clienteId={cliente._id}
       />
 
       <OverlayEditarCliente

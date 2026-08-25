@@ -20,20 +20,50 @@ import { cn } from "@/lib/cn";
  * botones de dos estados. Anunciarlos igual sería mentirle al lector de
  * pantalla.
  *
- * Aparte del comportamiento hay dos ASPECTOS, y son un eje independiente. Por
- * defecto la opción es texto dentro de un recuadro. Si la opción trae `tono`,
- * se pinta como `Badge` de ese color con un anillo alrededor de la activa: lo
- * pide el estado de un cliente (JES-54), donde cada valor ya tiene su color y
- * quitárselo dejaría cinco recuadros idénticos.
+ * Aparte del comportamiento hay dos ASPECTOS, y son un eje independiente:
  *
- * Es solo pintura: los dos modos de arriba no cambian, y una opción sin `tono`
- * se sigue viendo exactamente igual que antes.
+ * | Llamada                    | Cómo se ve                                  |
+ * | -------------------------- | ------------------------------------------- |
+ * | sin `tono`                 | chip de texto, teñido de `primary` al elegir |
+ * | con `tono`                 | chip de texto teñido DE SU COLOR (JES-65)   |
+ * | con `tono` + `"etiqueta"`  | `Badge` de su color con anillo (JES-54)     |
+ *
+ * El aspecto es un prop explícito y no se deduce de la presencia de `tono`,
+ * como se hacía cuando solo existía el caso de JES-54. En cuanto aparece un
+ * segundo aspecto CON tono, deducirlo se vuelve imposible y, peor, invisible:
+ * el tercero que llegara tendría que adivinar la regla. Sin `tono`, `variante`
+ * no pinta nada — no hay color con el que teñir.
+ *
+ * Los dos comportamientos de arriba no cambian, y una opción sin `tono` se
+ * sigue viendo exactamente igual que antes.
  */
 export type OpcionChip<T extends string> = {
   valor: T;
   etiqueta: string;
-  /** Con tono, la opción se pinta como `Badge` de ese color. Ver arriba. */
+  /** El color del valor. Sin él, la opción activa se tiñe de `primary`. */
   tono?: Tono;
+};
+
+/** Cómo se pinta una opción CON tono. Ver la tabla de arriba. */
+export type VarianteChip = "texto" | "etiqueta";
+
+/**
+ * El tinte de la opción elegida, uno por tono.
+ *
+ * Escritas enteras a propósito: Tailwind busca las clases leyendo el texto del
+ * fichero, así que un `bg-${tono}-bg` no llegaría a existir en la hoja de
+ * estilos y el chip saldría sin fondo.
+ *
+ * `neutral` no tiene color propio en el sistema —no hay `--color-neutral`—, así
+ * que cae en la superficie gris, que es su equivalente.
+ */
+const TINTES: Record<Tono, string> = {
+  success: "border-success bg-success-bg text-success",
+  warning: "border-warning bg-warning-bg text-warning",
+  error: "border-error bg-error-bg text-error",
+  info: "border-info bg-info-bg text-info",
+  primary: "border-primary bg-primary-subtle text-primary",
+  neutral: "border-border-strong bg-surface-2 text-text-muted",
 };
 
 export function Chips<T extends string>({
@@ -42,6 +72,7 @@ export function Chips<T extends string>({
   valor,
   onChange,
   permitirVaciar = false,
+  variante = "texto",
   error,
 }: {
   label: string;
@@ -50,6 +81,8 @@ export function Chips<T extends string>({
   onChange: (valor: T | null) => void;
   /** true → se puede quedar sin selección. false → siempre hay una. */
   permitirVaciar?: boolean;
+  /** Solo cambia el aspecto de las opciones con `tono`. Ver la tabla de arriba. */
+  variante?: VarianteChip;
   error?: string | null;
 }) {
   const id = useId();
@@ -90,6 +123,8 @@ export function Chips<T extends string>({
       >
         {opciones.map((opcion, indice) => {
           const activa = opcion.valor === valor;
+          const comoEtiqueta = opcion.tono !== undefined && variante === "etiqueta";
+
           return (
             <button
               key={opcion.valor}
@@ -110,7 +145,7 @@ export function Chips<T extends string>({
               }
               className={cn(
                 "transition-colors",
-                opcion.tono
+                comoEtiqueta
                   ? cn(
                       // El borde transparente de las inactivas reserva ya el
                       // sitio del anillo, para que nada se mueva al elegir.
@@ -125,14 +160,19 @@ export function Chips<T extends string>({
                         : "border-transparent",
                     )
                   : cn(
+                      // El relleno es el que ya tenía, no los 8px del diseño:
+                      // con 8px el chip se queda en unos 37px de alto, por
+                      // debajo del objetivo táctil de 44px que fija JES-73.
                       "rounded-md border px-3.5 py-2.5 text-sm font-medium",
-                      activa
-                        ? "border-primary bg-primary-subtle text-primary"
-                        : "border-border-strong bg-surface text-text-muted hover:bg-surface-2",
+                      !activa
+                        ? "border-border-strong bg-surface text-text-muted hover:bg-surface-2"
+                        : opcion.tono
+                          ? TINTES[opcion.tono]
+                          : "border-primary bg-primary-subtle text-primary",
                     ),
               )}
             >
-              {opcion.tono ? (
+              {comoEtiqueta ? (
                 <Badge tono={opcion.tono}>{opcion.etiqueta}</Badge>
               ) : (
                 opcion.etiqueta

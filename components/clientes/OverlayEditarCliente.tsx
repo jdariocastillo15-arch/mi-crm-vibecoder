@@ -171,12 +171,19 @@ export function OverlayEditarCliente({
 
           `Chips` sin `permitirVaciar` no devuelve nunca `null` —ni al volver a
           pulsar la activa ni con las flechas—, pero su firma lo admite porque
-          el otro modo sí lo usa. Un cliente siempre tiene estado. */}
+          el otro modo sí lo usa. Un cliente siempre tiene estado.
+
+          `variante="etiqueta"` es lo que pinta cada valor como su `Badge` de
+          color en vez de como un chip de texto teñido. Antes se deducía de que
+          las opciones traen `tono`; desde JES-65 hay dos aspectos con tono, así
+          que hay que decir cuál. Sin esto, los cinco estados se verían como los
+          chips de "Registrar venta". */}
       <Chips
         label="Estado"
         opciones={OPCIONES_ESTADO}
         valor={estado}
         onChange={(v) => v && setEstado(v)}
+        variante="etiqueta"
       />
 
       {/* Canal y Nota no están en el prototipo, que solo deja editar los datos
