@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Chips } from "@/components/ui/Chips";
-import { Skeleton } from "@/components/ui/Feedback";
+import { Metric, MetricFantasma } from "@/components/ui/Metric";
 import { ListaVentas, ListaVentasCargando } from "@/components/ventas/ListaVentas";
 import { OverlayRegistrarVenta } from "@/components/clientes/OverlayRegistrarVenta";
 import {
@@ -88,26 +88,38 @@ export default function VentasPage() {
               serían números falsos que cambian delante de los ojos. El filtro
               tampoco, porque no hay nada que filtrar todavía. */}
           <div className="grid grid-cols-2 gap-3">
-            <MetricaFantasma />
-            <MetricaFantasma />
+            <Card>
+              <MetricFantasma />
+            </Card>
+            <Card>
+              <MetricFantasma />
+            </Card>
           </div>
           <ListaVentasCargando />
         </>
       ) : (
         <>
+          {/* Las perdidas no entran en ninguna de las dos: eso lo decide
+              `resumenVentas`. El tono es un valor del componente, no una clase
+              suelta: así el color de la cifra lo elige el design system y no
+              cada pantalla por su cuenta. */}
           <div className="grid grid-cols-2 gap-3">
-            <Metrica
-              titulo="En marcha"
-              importe={resumen.enMarcha}
-              color="text-info-text"
-              detalle={textoOportunidades(resumen.conteo.abierta)}
-            />
-            <Metrica
-              titulo="Ganado"
-              importe={resumen.ganado}
-              color="text-success-text"
-              detalle={textoVentasCerradas(resumen.conteo.ganada)}
-            />
+            <Card>
+              <Metric
+                label="En marcha"
+                value={formatEuros(resumen.enMarcha)}
+                tono="info"
+                sub={textoOportunidades(resumen.conteo.abierta)}
+              />
+            </Card>
+            <Card>
+              <Metric
+                label="Ganado"
+                value={formatEuros(resumen.ganado)}
+                tono="success"
+                sub={textoVentasCerradas(resumen.conteo.ganada)}
+              />
+            </Card>
           </div>
 
           {/* El rótulo se esconde a la vista porque el diseño no lo lleva, pero
@@ -137,50 +149,5 @@ export default function VentasPage() {
         onCerrar={() => setAbierto(false)}
       />
     </div>
-  );
-}
-
-/**
- * Una de las dos cifras de cabecera.
- * Las perdidas no entran en ninguna: eso lo decide `resumenVentas`.
- */
-function Metrica({
-  titulo,
-  importe,
-  color,
-  detalle,
-}: {
-  titulo: string;
-  importe: number;
-  /** Clase de color, escrita entera por quien llama. */
-  color: string;
-  detalle: string;
-}) {
-  return (
-    <Card>
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[13px] text-text-muted">{titulo}</span>
-        {/* Mono tabular para que las cifras de las dos tarjetas queden
-            alineadas dígito a dígito, y no bailen al cambiar. */}
-        <span
-          className={`font-mono text-[28px] leading-[1.1] font-medium tabular-nums ${color}`}
-        >
-          {formatEuros(importe)}
-        </span>
-        <span className="text-xs text-text-subtle">{detalle}</span>
-      </div>
-    </Card>
-  );
-}
-
-function MetricaFantasma() {
-  return (
-    <Card>
-      <div className="flex flex-col gap-2.5">
-        <Skeleton width="45%" height={13} />
-        <Skeleton width="70%" height={26} />
-        <Skeleton width="55%" height={11} />
-      </div>
-    </Card>
   );
 }
