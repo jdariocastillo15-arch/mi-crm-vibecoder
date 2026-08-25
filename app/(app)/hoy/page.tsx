@@ -21,7 +21,7 @@ import {
 import { OverlayNuevaTarea, type BorradorTarea } from "@/components/hoy/OverlayNuevaTarea";
 import { OverlayNuevoCliente } from "@/components/clientes/OverlayNuevoCliente";
 import { OverlayRegistrarInteraccion } from "@/components/clientes/OverlayRegistrarInteraccion";
-import { OverlayPorConstruir } from "@/components/ui/OverlayPorConstruir";
+import { OverlayRegistrarVenta } from "@/components/clientes/OverlayRegistrarVenta";
 import { AVISOS } from "@/lib/constants";
 import { fechaLarga, hoy, sumarDias } from "@/lib/format";
 import { agruparParaHoy } from "@/lib/seguimientos";
@@ -77,6 +77,8 @@ export default function HoyPage() {
   const [aperturaCliente, setAperturaCliente] = useState(0);
   /** Lo mismo para "Registrar interacción". */
   const [aperturaInteraccion, setAperturaInteraccion] = useState(0);
+  /** Y para "Registrar venta". */
+  const [aperturaVenta, setAperturaVenta] = useState(0);
 
   const marcarHecho = useMutation(api.seguimientos.marcarHecho).withOptimisticUpdate(
     (localStore, { seguimientoId }) => {
@@ -128,6 +130,7 @@ export default function HoyPage() {
     if (accion === "tarea") setBorrador(borradorNuevo());
     if (accion === "cliente") setAperturaCliente((n) => n + 1);
     if (accion === "interaccion") setAperturaInteraccion((n) => n + 1);
+    if (accion === "venta") setAperturaVenta((n) => n + 1);
     setVolverATarea(false);
     setOverlay(accion);
   }
@@ -265,13 +268,11 @@ export default function HoyPage() {
         onCerrar={cerrarSi("interaccion")}
       />
 
-      <OverlayPorConstruir
+      {/* Tampoco lleva `clienteId`, por lo mismo: aquí se pregunta. */}
+      <OverlayRegistrarVenta
+        key={`venta-${aperturaVenta}`}
         abierto={overlay === "venta"}
         onCerrar={cerrarSi("venta")}
-        titulo="Registrar venta"
-        issue="JES-65"
-        lineas="líneas 567–600"
-        descripcion="Concepto, importe en euros, estado y fecha. Abierto desde aquí trae selector de cliente. Una venta no cuenta como contacto."
       />
     </div>
   );

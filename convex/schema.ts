@@ -104,8 +104,14 @@ export default defineSchema({
     /**
      * Quién lo cerró, que no tiene por qué ser el responsable: en "Hoy" se ven
      * los pendientes de todo el equipo y cualquiera puede tachar lo que ya está
-     * hecho. Se guarda por dos motivos: el historial del cliente lo muestra
-     * (JES-58), y "Deshacer" solo se lo permite a quien lo cerró.
+     * hecho. Se guarda para que "Deshacer" solo se lo permita a quien lo
+     * cerró.
+     *
+     * OJO: NO es lo que se pinta en el historial del cliente. Ahí va el
+     * RESPONSABLE, y lo dicen las dos issues que mandan sobre esa lista —
+     * JES-58 ("reaparece en el historial [...] con su responsable") y el
+     * criterio de JES-64 ("los seguimientos, «Responsable:»")—. Este comentario
+     * decía lo contrario y era un error.
      */
     completadoPorId: v.optional(v.id("users")),
   })

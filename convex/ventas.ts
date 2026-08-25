@@ -13,14 +13,28 @@ export const list = query({
   },
 });
 
+/**
+ * Las ventas de un cliente, con el nombre de quien las registró.
+ * Mismo cruce y mismo motivo que en `interacciones.listByCliente`.
+ */
 export const listByCliente = query({
   args: { clienteId: v.id("clientes") },
   handler: async (ctx, { clienteId }) => {
     await requireUser(ctx);
-    return await ctx.db
+
+    const ventas = await ctx.db
       .query("ventas")
       .withIndex("by_cliente", (q) => q.eq("clienteId", clienteId))
       .collect();
+
+    return await Promise.all(
+      ventas.map(async (venta) => {
+        // Puede faltar de verdad: borrar a alguien del equipo deja vivas sus
+        // ventas (ver `users.eliminarUsuario` y JES-70).
+        const autor = await ctx.db.get(venta.autorId);
+        return { ...venta, autorNombre: autor?.name ?? null };
+      }),
+    );
   },
 });
 

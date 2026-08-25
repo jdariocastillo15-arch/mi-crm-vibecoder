@@ -5,14 +5,31 @@ import { requireUser, assertClienteExiste, hoy } from "./helpers";
 
 /** Interacciones — implementa JES-62 y JES-63. */
 
+/**
+ * Las interacciones de un cliente, con el nombre de quien las anotó.
+ *
+ * El cruce se hace aquí y no en la pantalla por el mismo motivo que en
+ * `seguimientos.listByCliente`: el historial (JES-64) escribe "Registrado por
+ * X" y no debe traerse el equipo entero para escribir una palabra.
+ */
 export const listByCliente = query({
   args: { clienteId: v.id("clientes") },
   handler: async (ctx, { clienteId }) => {
     await requireUser(ctx);
-    return await ctx.db
+
+    const interacciones = await ctx.db
       .query("interacciones")
       .withIndex("by_cliente", (q) => q.eq("clienteId", clienteId))
       .collect();
+
+    return await Promise.all(
+      interacciones.map(async (interaccion) => {
+        // Puede faltar de verdad: borrar a alguien del equipo deja vivo lo que
+        // anotó (ver `users.eliminarUsuario` y JES-70).
+        const autor = await ctx.db.get(interaccion.autorId);
+        return { ...interaccion, autorNombre: autor?.name ?? null };
+      }),
+    );
   },
 });
 
