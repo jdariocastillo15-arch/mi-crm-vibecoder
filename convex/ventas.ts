@@ -5,11 +5,48 @@ import { requireUser, assertClienteExiste, hoy } from "./helpers";
 
 /** Ventas y oportunidades — implementa JES-65, JES-66 y JES-67. */
 
+/**
+ * Todas las ventas, con el nombre de su cliente — la pantalla "Ventas".
+ *
+ * Devuelve la tabla entera y sin resumir, a propósito: de aquí salen a la vez
+ * el listado, los cuatro contadores del filtro y las dos cifras de cabecera
+ * (`lib/ventas.ts#resumenVentas`). Sumar dos números de un array que ya está
+ * en memoria es gratis, y sobre todo garantiza que las cifras y las filas no
+ * puedan discrepar — que es literalmente uno de los criterios de JES-66.
+ *
+ * Aquí vivía además una consulta `metricas` que calculaba esas mismas sumas en
+ * el servidor. Se ha quitado: no llegó a tener consumidores, releía la tabla
+ * entera para responder lo que ya está aquí, y dejaba dos definiciones de "En
+ * marcha" en sitios distintos. Está en el historial de git.
+ */
 export const list = query({
   args: {},
   handler: async (ctx) => {
     await requireUser(ctx);
-    return await ctx.db.query("ventas").collect();
+
+    const ventas = await ctx.db.query("ventas").collect();
+
+    return await Promise.all(
+      ventas.map(async (venta) => {
+        const cliente = await ctx.db.get(venta.clienteId);
+
+        // Hoy no puede pasar —`clientes` no tiene borrado—, pero si pasara, la
+        // fila NO se descarta: es dinero, y hacerlo desaparecer del listado se
+        // lo llevaría también de las sumas. Se avisa y se pinta sin cliente;
+        // la pantalla enseña un guion y no la enlaza a ninguna parte.
+        //
+        // Es el trato contrario al de `seguimientos.listPendientes`, que sí
+        // descarta: un seguimiento sin cliente no es accionable, una venta sí
+        // cuenta.
+        if (cliente === null) {
+          console.warn(
+            `La venta ${venta._id} apunta a un cliente que no existe; se pinta sin nombre.`,
+          );
+        }
+
+        return { ...venta, clienteNombre: cliente?.nombre ?? null };
+      }),
+    );
   },
 });
 
@@ -35,34 +72,6 @@ export const listByCliente = query({
         return { ...venta, autorNombre: autor?.name ?? null };
       }),
     );
-  },
-});
-
-/**
- * Las dos cifras de cabecera de la pantalla de Ventas.
- * Se calculan, no se guardan. Las perdidas no suman en ninguna.
- */
-export const metricas = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireUser(ctx);
-    const ventas = await ctx.db.query("ventas").collect();
-
-    const sumaDe = (estado: "abierta" | "ganada") =>
-      ventas
-        .filter((venta) => venta.estado === estado)
-        .reduce((total, venta) => total + venta.importe, 0);
-
-    return {
-      enMarcha: sumaDe("abierta"),
-      ganado: sumaDe("ganada"),
-      conteo: {
-        todas: ventas.length,
-        abierta: ventas.filter((v) => v.estado === "abierta").length,
-        ganada: ventas.filter((v) => v.estado === "ganada").length,
-        perdida: ventas.filter((v) => v.estado === "perdida").length,
-      },
-    };
   },
 });
 
