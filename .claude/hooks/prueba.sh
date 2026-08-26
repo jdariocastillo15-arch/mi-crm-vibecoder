@@ -195,6 +195,17 @@ probar pasa    "lo mismo en una sustitución"        'echo "$(which gh)"'
 probar pasa    "command -v en una sustitución"      'test -n "$(command -v git)"'
 probar pasa    "lectura de gh dentro de un subshell" '(gh pr list --state open)'
 
+echo "── defecto 18 · espacios escapados y comillas de relleno ──"
+probar BLOQUEA "bash -c con espacios escapados"  'bash -c gh\ pr\ merge\ 1\ --merge' 'gh pr merge'
+probar BLOQUEA "sh -c con espacios escapados"    'sh -c gh\ pr\ merge\ 1\ --merge'
+probar BLOQUEA "alias en línea escapado"         'git -c alias.m=!gh\ pr\ merge\ 1\ --merge m' 'gh pr merge'
+probar BLOQUEA "barra dentro del nombre"         'g\h pr merge 1'
+probar BLOQUEA "comillas vacías de relleno"      'g""h pr merge 1'
+probar BLOQUEA "comillas partiendo el nombre"    'g"h" pr merge 1'
+probar BLOQUEA "push con el nombre escapado"     'gi\t push'
+probar pasa    "ruta con espacios escapados"     'git add mi\ fichero.txt'
+probar pasa    "cd a una ruta con espacios"      'cd /ruta/con\ espacios && git log --oneline'
+
 echo "── el precio del barrido, comprobado a propósito ──"
 probar pasa    "mensaje que menciona «el push»"  'git commit -m "arregla el push del formulario"'
 probar BLOQUEA "mensaje que menciona el verbo"   'git commit -m "arregla el gh pr merge"'

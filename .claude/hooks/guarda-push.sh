@@ -241,17 +241,36 @@ def anidados(texto, vueltas=6):
     return fuera
 
 
-# Se examina el comando entero Y el contenido de cada cadena entrecomillada:
-# ahí se esconde un `bash -c "git push"`, que si no pasa porque su primer token
-# es `bash`. El precio es que un `echo` del comando también se bloquea.
-#
-# NO se deduplica: contar de más bloquea de más, y contar de menos publica de
-# más. Dos `gh pr comment` idénticos son dos escrituras.
-candidatos = [cmd] + cuerpos
-candidatos += re.findall(r"\x27([^\x27]*)\x27", cmd)
-candidatos += re.findall(r"\"([^\"]*)\"", cmd)
-for base in list(candidatos):
-    candidatos += anidados(base)
+def literal(texto):
+    """El texto como lo ve la shell tras quitar escapes y comillas.
+
+    `bash -c gh\\ pr\\ merge\\ 1` y `g""h pr merge 1` acaban ejecutando gh: el
+    nombre va LITERAL, solo vestido para la shell. Partiendo por espacios
+    salían `gh\\` y `g` como tokens, y el nombre ya no coincidía.
+
+    No es lo mismo que un ejecutable construido (`$G pr merge`), que sigue
+    siendo el límite declarado: aquí no hay nada que resolver, solo que
+    desvestir. Se añade como candidato APARTE, sin quitar los otros, así que
+    solo puede ver de más.
+    """
+    return re.sub(r"\\(.)", r"\1", texto).replace(chr(34), "").replace(chr(39), "")
+
+
+def candidatos_de(texto, extra):
+    """Todos los sitios de donde puede salir una orden: el texto entero, lo
+    que va entrecomillado —ahí se esconde un `bash -c "git push"`— y lo que va
+    dentro de paréntesis o comillas invertidas.
+
+    NO se deduplica dentro de una vista: dos `gh pr comment` idénticos son dos
+    escrituras. Contar de menos publica de más.
+    """
+    cs = [texto] + list(extra)
+    cs += re.findall(r"\x27([^\x27]*)\x27", texto)
+    cs += re.findall(r"\"([^\"]*)\"", texto)
+    for base in list(cs):
+        cs += anidados(base)
+    return cs
+
 
 def operaciones_en(trozo):
     """Todas las publicaciones del fragmento.
@@ -282,12 +301,32 @@ def operaciones_en(trozo):
     return fuera
 
 
-for texto in candidatos:
-    for trozo in re.split(r"[;&|\n]+", texto):
-        trozo = trozo.strip()
-        for c in operaciones_en(trozo):
-            limpio = re.sub(r"[|\n\r]+", " ", trozo).strip()[:200]
-            print(c[0] + "|" + c[1] + "|" + limpio)
+def barrer(candidatos):
+    fuera = []
+    for texto in candidatos:
+        for trozo in re.split(r"[;&|\n]+", texto):
+            trozo = trozo.strip()
+            for c in operaciones_en(trozo):
+                limpio = re.sub(r"[|\n\r]+", " ", trozo).strip()[:200]
+                fuera.append((c[0], c[1], limpio))
+    return fuera
+
+
+# DOS VISTAS del mismo comando: como viene, y desvestido de escapes y comillas.
+# Se queda la que ve MÁS; no se suman.
+#
+# Sumarlas convertía cualquier orden entrecomillada en "dos publicaciones",
+# porque la misma orden aparece en las dos vistas. Y quedarse solo con la
+# desnuda tampoco vale: al quitar las comillas, un `--title "--help"` pasa a
+# parecer una peticion de ayuda de verdad y la orden se volvia invisible.
+#
+# La vista desnuda solo puede ver de más, salvo en ese caso de disfraz, donde
+# la cruda ve más. Por eso el máximo es el número bueno.
+crudo = barrer(candidatos_de(cmd, cuerpos))
+desnudo = barrer(candidatos_de(literal(cmd), [literal(c) for c in cuerpos]))
+
+for clase, motivo, frag in (desnudo if len(desnudo) > len(crudo) else crudo):
+    print(clase + "|" + motivo + "|" + frag)
 ' 2>/dev/null)
 
 [ -n "$operaciones" ] || exit 0

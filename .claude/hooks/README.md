@@ -164,6 +164,20 @@ clon fuera de esta rama.
 **Se mira dentro de las comillas**, aparte del comando entero: si no, un
 `bash -c "…"` se cuela porque su primer token es `bash`.
 
+**Y se mira el comando desvestido**, sin escapes ni comillas. `bash -c gh\ pr\
+merge\ 1` es la misma orden con otra ropa: al partir por espacios salían `gh\`
+y `pr\`, y el nombre ya no coincidía con nada. Lo mismo con
+`g""h pr merge 1` o con un alias en línea escapado. **No son ejecutables
+construidos** —el nombre va literal, solo vestido para la shell— así que no
+caen en el límite de más abajo: se ven y se bloquean.
+
+Se calculan **las dos vistas** —como viene y desnuda— y se queda **la que ve
+más**, no la suma. Sumarlas convertía cualquier orden entrecomillada en «dos
+publicaciones», porque la misma orden aparece en las dos. Y quedarse solo con
+la desnuda tampoco vale: al quitar las comillas, un `--title "--help"` pasa a
+parecer una petición de ayuda de verdad y la orden se volvía invisible. En ese
+caso la vista cruda ve más, y por eso el máximo es el número bueno.
+
 **Y dentro de todo lo demás que la shell ejecuta por su cuenta:**
 
 - **Sustituciones y subshells.** `$(…)`, `` `…` ``, `<(…)` y hasta un `(…)`
@@ -221,15 +235,19 @@ Están escritos porque conviene saberlos, no porque den igual:
   `git`/`gh` que se usan a diario —`status`, `log`, `diff`, `show`, `grep`,
   `add`, `commit`, `fetch`, `worktree`, `ls-remote`, y las lecturas de `gh`—
   se ve afectado.
-- **El ejecutable construido sin token literal se escapa.** El barrido busca la
-  palabra `git` o `gh`; si no aparece, no hay nada que ver. Comprobado que pasan
-  `G=gh; $G pr merge 1`, `$(printf gh) pr merge 1` y `g""h pr merge 1`, y que
-  una función o un alias definidos antes tampoco se ven al usarlos —de un
-  `alias p="gh pr merge"; p 1` se ve la definición entrecomillada, no la
-  llamada—. Un alias en línea de git sí se ve si el payload trae la palabra
-  literal —`git -c alias.m="!gh pr merge 1" m` bloquea—, pero no si la construye
-  —`git -c alias.m="!$G pr merge" m` pasa—. Cerrar esto exigiría bloquear toda
-  esa sintaxis, no reconocerla.
+- **El ejecutable construido en tiempo de ejecución se escapa.** El barrido
+  busca la palabra `git` o `gh`; si el nombre no llega a aparecer nunca, no hay
+  nada que ver. Comprobado que pasan `G=gh; $G pr merge 1` y
+  `$(printf gh) pr merge 1`, y que una función o un alias definidos antes
+  tampoco se ven al usarlos —de un `alias p="gh pr merge"; p 1` se ve la
+  definición, no la llamada—. Un alias en línea de git sí se ve si el payload
+  trae la palabra, escapada o no —`git -c alias.m=!gh\ pr\ merge\ 1 m`
+  bloquea—, pero no si la construye —`git -c alias.m="!$G pr merge" m` pasa—.
+
+  El corte está donde tiene que estar: **vestir el nombre no lo esconde**
+  —escapes y comillas se quitan antes de mirar—, **construirlo sí**. Cerrar eso
+  exigiría ejecutar la shell para saber qué va a ejecutar, que es precisamente
+  lo que no se puede hacer desde un hook que corre antes.
   Entra de lleno en el «asistente que decide saltárselo» de más arriba, pero
   conviene tenerlo nombrado y no darlo por cubierto.
 - **La matriz crea vales reales** mientras corre, unos milisegundos, con un
@@ -241,7 +259,7 @@ Están escritos porque conviene saberlos, no porque den igual:
 bash .claude/hooks/prueba.sh
 ```
 
-**113 casos** en tres bloques:
+**122 casos** en tres bloques:
 
 - **Detección** — incluidos los dos falsos positivos reales, los rodeos
   evidentes (`bash -c`, ruta absoluta, `--repo` delante del verbo, prefijos y
