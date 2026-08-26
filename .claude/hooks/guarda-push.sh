@@ -83,6 +83,58 @@ def trocear(texto):
     return re.sub(METACARACTERES, r" \g<0> ", texto).split()
 
 
+def unir_lineas(texto):
+    """Una barra al final de linea es continuacion: la shell junta las dos.
+
+    Sin esto, `git push --no-\\` + salto + `verify origin main` se troceaba en
+    dos: salia un push del monton y un `verify origin main` que no es nada. La
+    shell, en cambio, entrega `--no-verify` entero.
+    """
+    return re.sub(r"\\\n", "", texto)
+
+
+def _car(m, base):
+    """El caracter de ese codigo. Si se sale de Unicode se deja como venia: la
+    shell tampoco lo convertiria, y reventar aqui seria peor que no verlo."""
+    try:
+        n = int(m.group(1), base)
+        if 0 <= n <= 0x10FFFF:
+            return chr(n)
+    except (ValueError, OverflowError):
+        pass
+    return m.group(0)
+
+
+def literal(texto):
+    """El texto como lo ve la shell tras quitar escapes y comillas.
+
+    `bash -c gh\\ pr\\ merge\\ 1` y `g""h pr merge 1` acaban ejecutando gh: el
+    nombre va LITERAL, solo vestido para la shell. Partiendo por espacios
+    salian `gh\\` y `g` como tokens, y el nombre ya no coincidia.
+
+    No es lo mismo que un ejecutable construido (`$G pr merge`), que sigue
+    siendo el limite declarado: aqui no hay nada que resolver, solo que
+    desvestir.
+    """
+    def _ansi(m):
+        # Las comillas ANSI-C —dolar y comilla simple— hacen que bash y zsh
+        # interpreten \x, \u, \U y los octales DENTRO. Se decodifica solo ahi,
+        # que es donde ellos lo hacen. Faltaba \U, y un guion escrito
+        # \U0000002d dentro de ellas se colaba entero.
+        s = m.group(1)
+        for patron, base in ((r"\\x([0-9A-Fa-f]{1,2})", 16),
+                             (r"\\u([0-9A-Fa-f]{1,4})", 16),
+                             (r"\\U([0-9A-Fa-f]{1,8})", 16),
+                             (r"\\([0-7]{1,3})", 8)):
+            s = re.sub(patron, lambda h, b=base: _car(h, b), s)
+        return s
+
+    t = re.sub(r"\$\x27([^\x27]*)\x27", _ansi, texto)
+    t = re.sub(r"\$(?=\")", "", t)          # `$"..."` es traduccion de locale
+    t = re.sub(r"\\(.)", r"\1", t)          # \X -> X
+    return t.replace(chr(34), "").replace(chr(39), "")
+
+
 def sin_opciones(piezas, con_valor):
     """Tokens que no son opciones, en orden."""
     fuera, i = [], 0
@@ -147,7 +199,13 @@ def clasificar(piezas):
             return None
         # `--no-verify` existe para no ejecutar los hooks, y `pre-push` es la
         # única capa que protege este clon fuera de esta rama.
-        if "--no-verify" in piezas:
+        # Estos dos flags se miran DESVESTIDOS y `--help` no. La asimetria es la
+        # regla, no una excepcion: se desviste cuando desvestir ENDURECE.
+        # `--no-verify` y `--dry-run` REFUERZAN la deteccion, asi que hay que
+        # verlos aunque vengan disfrazados. `--help` la SUPRIME, asi que se mira
+        # crudo: desvestido, un `--title "--help"` pasaria por peticion de ayuda.
+        desnudas = [literal(p) for p in piezas]
+        if "--no-verify" in desnudas:
             return ("push-no-verify", "git push --no-verify")
         # El ensayo no toca el remoto, pero TAMPOCO llega a completarse con la
         # guarda puesta: comprobado que git ejecuta `pre-push` también en
@@ -157,7 +215,7 @@ def clasificar(piezas):
         #
         # En `gh` no hay exención de ninguna clase: la ayuda de `gh pr create`
         # dice que su `--dry-run` "may still push git changes".
-        if "--dry-run" in piezas:
+        if "--dry-run" in desnudas:
             return ("push-dry-run", "git push --dry-run")
         return ("push", "git push")
 
@@ -219,6 +277,12 @@ def _heredoc(m):
 cmd = re.sub(r"<<-?\s*[\x27\"]?(\w+)[\x27\"]?.*?^\s*\1\s*$", _heredoc, cmd,
              flags=re.S | re.M)
 
+# Ahora, y no antes: el heredoc necesita las lineas tal cual para encontrar su
+# marcador de cierre. Despues ya no las necesita nadie, y juntarlas aqui —sobre
+# `cmd`, antes de construir las vistas— hace que las vean juntas las DOS.
+cmd = unir_lineas(cmd)
+cuerpos = [unir_lineas(c) for c in cuerpos]
+
 
 def anidados(texto, vueltas=6):
     """Lo que va dentro de paréntesis o comillas invertidas.
@@ -239,21 +303,6 @@ def anidados(texto, vueltas=6):
         fuera += nuevos
         pendiente = nuevos
     return fuera
-
-
-def literal(texto):
-    """El texto como lo ve la shell tras quitar escapes y comillas.
-
-    `bash -c gh\\ pr\\ merge\\ 1` y `g""h pr merge 1` acaban ejecutando gh: el
-    nombre va LITERAL, solo vestido para la shell. Partiendo por espacios
-    salían `gh\\` y `g` como tokens, y el nombre ya no coincidía.
-
-    No es lo mismo que un ejecutable construido (`$G pr merge`), que sigue
-    siendo el límite declarado: aquí no hay nada que resolver, solo que
-    desvestir. Se añade como candidato APARTE, sin quitar los otros, así que
-    solo puede ver de más.
-    """
-    return re.sub(r"\\(.)", r"\1", texto).replace(chr(34), "").replace(chr(39), "")
 
 
 def candidatos_de(texto, extra):
@@ -333,6 +382,38 @@ for clase, motivo, frag in (desnudo if len(desnudo) > len(crudo) else crudo):
 
 cuantas=$(printf '%s\n' "$operaciones" | grep -c .)
 
+# ---------------------------------------------------------------------------
+# El vale
+#
+# Vive SIEMPRE en el worktree principal, para que esta capa y la de git miren
+# el mismo fichero. `--show-toplevel` no sirve: desde un worktree devuelve el
+# worktree, y entonces son dos ficheros distintos.
+#
+# Se resuelve AQUÍ ARRIBA, antes que ninguna salida. Estando abajo, un vale ya
+# entregado sobrevivía a todo lo que se frena antes de llegar a él: un ensayo,
+# un comando con dos operaciones, un `--no-verify`. Ahora muere lo primero.
+# ---------------------------------------------------------------------------
+raiz=$(git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
+[ -n "$raiz" ] || raiz=$(git rev-parse --show-toplevel 2>/dev/null)
+vale="$raiz/.claude/push-autorizado"
+sha=$(git rev-parse HEAD 2>/dev/null)
+
+# ---- Vale ya entregado: se acabó, sea cual sea la operación ----
+if [ -n "$raiz" ] && [ -f "$vale" ] &&
+   [ "$(sed -n '2p' "$vale" | tr -d '[:space:]')" = "entregado" ]; then
+  rm -f "$vale"
+  cat >&2 <<'FIN'
+BLOQUEADO — ese vale ya se entregó a `.git/hooks/pre-push`.
+
+Un vale autoriza UNA publicación. Éste ya salió de esta capa marcado como
+entregado, así que su turno pasó: queda destruido.
+
+Si el push no llegó a completarse, vuelve a enseñar lo pendiente y pide
+autorización otra vez. No se reutiliza.
+FIN
+  exit 2
+fi
+
 # ---- `--no-verify`: se salta la puerta de git. No hay vale que lo salve ----
 if printf '%s\n' "$operaciones" | grep -q '^push-no-verify|'; then
   cat >&2 <<'FIN'
@@ -386,27 +467,18 @@ FIN
   exit 2
 fi
 
+# Fuera de un repo no hay vale que valga ni diff que enseñar. Se comprueba
+# aquí, DESPUÉS de las salidas de arriba, para no perderlas por estar fuera.
+[ -n "$raiz" ] || exit 0
+
 clase=${operaciones%%|*}
 sinclase=${operaciones#*|}
 que=${sinclase%%|*}
 fragmento=${sinclase#*|}
 
-# ---------------------------------------------------------------------------
-# El vale
-#
-# Vive SIEMPRE en el worktree principal, para que esta capa y la de git miren
-# el mismo fichero. `--show-toplevel` no sirve: desde un worktree devuelve el
-# worktree, y entonces son dos ficheros distintos.
-#
 # Se valida contra el HEAD del worktree EN CURSO, que es el commit que se va a
 # publicar. No se acepta el de otros worktrees: un vale de un worktree no debe
 # autorizar un `gh pr merge` que no tiene nada que ver.
-# ---------------------------------------------------------------------------
-raiz=$(git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
-[ -n "$raiz" ] || raiz=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
-vale="$raiz/.claude/push-autorizado"
-sha=$(git rev-parse HEAD 2>/dev/null)
-
 if [ -f "$vale" ]; then
   autorizado=$(head -n1 "$vale" | tr -d '[:space:]')
   reciente=$(find "$vale" -mmin "-$MINUTOS_VALIDO" 2>/dev/null)
@@ -417,7 +489,20 @@ if [ -f "$vale" ]; then
       # `.git/hooks/pre-push`— y si esta lo borrase, la segunda lo encontraría
       # vacío: haría falta autorizar dos veces el mismo push. Lo consume la
       # puerta de git, que es la última y la que de verdad llega al remoto.
-      echo "Vale válido para ${sha:0:7} · $que — lo consumirá .git/hooks/pre-push" >&2
+      #
+      # Pero sí se MARCA. Sin marca, un push que no llega a `pre-push` —porque
+      # git falló antes, o porque la opción se saltó el hook— dejaba el vale
+      # entero y servía para otra publicación. Marcado, esta capa lo mata en
+      # cuanto lo vuelve a ver, sea cual sea la operación.
+      #
+      # `pre-push` lee sólo la primera línea, así que la marca le da igual, y
+      # tiene que seguir aceptando vales SIN marca: los que emite el owner a
+      # mano nunca la llevan.
+      #
+      # Reescribir el fichero pone su fecha a cero: los 15 minutos pasan a
+      # contarse desde la entrega, no desde que se emitió.
+      printf '%s\nentregado\n' "$sha" > "$vale"
+      echo "Vale entregado a .git/hooks/pre-push para ${sha:0:7} · $que" >&2
     else
       # Un `gh` de escritura no pasa por ningún hook de git: aquí o nunca.
       rm -f "$vale"

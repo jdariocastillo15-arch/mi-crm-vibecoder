@@ -21,6 +21,8 @@ VALE="$RAIZ/.claude/push-autorizado"
 CEROS=0000000000000000000000000000000000000000
 SHA=$(git rev-parse HEAD)
 OTRO=0123456789abcdef0123456789abcdef01234567
+# Un vale ya entregado a `.git/hooks/pre-push`: mismo SHA, segunda línea puesta.
+MARCADO=$(printf '%s\nentregado' "$SHA")
 
 trap 'rm -f "$VALE"' EXIT INT TERM
 
@@ -58,7 +60,10 @@ probar() {
   printf '  ok    %-8s  %s\n' "$real" "$descripcion"
 }
 
-# probar_vale <pasa|BLOQUEA> <sigue|borrado> <descripción> <comando> <sha del vale>
+# probar_vale <pasa|BLOQUEA> <sigue|marcado|borrado> <descripción> <comando> <vale>
+#
+# `marcado` es su propio estado: el vale que sobrevive a un push está entregado,
+# y confundirlo con uno intacto es justo el fallo que se está cerrando.
 probar_vale() {
   local esperado="$1" vale_esperado="$2" descripcion="$3" comando="$4" sha_vale="$5"
   local codigo real real_vale
@@ -67,7 +72,13 @@ probar_vale() {
   entrada "$comando" | bash "$GUARDA" >/dev/null 2>&1
   codigo=$?
   real="pasa"; [ "$codigo" -ne 0 ] && real="BLOQUEA"
-  real_vale="sigue"; [ -f "$VALE" ] || real_vale="borrado"
+  if [ ! -f "$VALE" ]; then
+    real_vale="borrado"
+  elif [ "$(sed -n '2p' "$VALE" | tr -d '[:space:]')" = "entregado" ]; then
+    real_vale="marcado"
+  else
+    real_vale="sigue"
+  fi
   rm -f "$VALE"
 
   if [ "$real" = "$esperado" ] && [ "$real_vale" = "$vale_esperado" ]; then
@@ -256,14 +267,50 @@ probar BLOQUEA "--help entrecomillado como valor"    'gh pr create --title "--he
 probar BLOQUEA "--no-verify pelado"                  'git push --no-verify'          'no-verify'
 probar BLOQUEA "--no-verify con destino"             'git push --no-verify origin main' 'no-verify'
 
+echo "── defecto 19 · el flag vestido ──"
+# El disfraz no cambia lo que ejecuta la shell: los cuatro primeros llegan a git
+# como `--no-verify` pelado. Se comprueba el TEXTO del mensaje, no sólo que
+# bloquee: sin vale bloquearía igual por falta de permiso, y el defecto era que
+# lo clasificaba como un push del montón y delegaba en el hook que se salta.
+probar BLOQUEA "barra dentro del flag"        'git push --no-\verify origin main' 'no-verify'
+probar BLOQUEA "comillas vacías de relleno"   'git push --no""-verify'             'no-verify'
+probar BLOQUEA "barra antes del guion"        'git push --no\-verify'              'no-verify'
+probar BLOQUEA "continuación de línea" \
+       "$(printf 'git push --no-\\\nverify origin main')"                        'no-verify'
+probar BLOQUEA "comillas ANSI-C"              "git push \$'--no-verify' origin main" 'no-verify'
+probar BLOQUEA "ANSI-C con \x hexadecimal"    "git push \$'--no\\x2dverify' origin main" 'no-verify'
+probar BLOQUEA "ANSI-C en octal"              "git push \$'--no\\055verify'"        'no-verify'
+probar BLOQUEA "ANSI-C con \U de ocho cifras" "git push \$'--no\\U0000002dverify'"  'no-verify'
+probar BLOQUEA "traducción de locale"         'git push $"--no-verify"'            'no-verify'
+probar BLOQUEA "el ensayo, también vestido"   'git push --dry\-run'   'no llega a completarse'
+# Si el python de la guarda revienta, su stderr va a /dev/null, no salen
+# operaciones y la guarda DEJA PASAR TODO. Así que un código fuera de Unicode
+# tiene que dejarse como está, no tumbarla: se comprueba que sigue viendo el
+# push —aunque el flag disfrazado así ya no se reconozca, límite declarado—.
+probar BLOQUEA "un \U fuera de Unicode no la tumba" \
+       "git push \$'--no\\UFFFFFFFFverify' origin main"                'COMMITS PENDIENTES'
+
 echo "── el informe enseña el comando exacto ──"
 probar BLOQUEA "el destino -R sale en el informe"    'gh pr merge 1 -R otro/repo'    '-R otro/repo'
 
 echo "── ciclo del vale · capa de Claude ──"
-probar_vale pasa    sigue   "git push NO consume: lo hará pre-push"  'git push'              "$SHA"
+probar_vale pasa    marcado "git push no consume: marca y delega"    'git push'              "$SHA"
 probar_vale pasa    borrado "gh de escritura sí consume"             'gh pr create -t x'     "$SHA"
 probar_vale BLOQUEA sigue   "--no-verify: el vale no lo salva"       'git push --no-verify'  "$SHA"
 probar_vale BLOQUEA borrado "vale de otro commit: se destruye"       'git push'              "$OTRO"
+
+echo "── defecto 19 · el ciclo de la marca ──"
+# La marca la comprueba la capa de Claude ANTES que nada, así que un vale ya
+# entregado muere con cualquier operación: también con un ensayo o con un
+# comando de dos, que antes salían por arriba sin llegar a mirarlo.
+probar_vale BLOQUEA borrado "marcado · otro push"                   'git push'              "$MARCADO"
+probar_vale BLOQUEA borrado "marcado · un gh de escritura"          'gh pr create -t x'     "$MARCADO"
+probar_vale BLOQUEA borrado "marcado · un ensayo, por el orden"     'git push --dry-run'    "$MARCADO"
+probar_vale BLOQUEA borrado "marcado · dos operaciones, por el orden" \
+       'gh pr merge 1 && gh pr edit 2' "$MARCADO"
+probar_vale BLOQUEA borrado "marcado · --no-verify, por el orden"   'git push --no-verify'  "$MARCADO"
+probar_vale BLOQUEA sigue   "válido · el flag vestido no lo gasta"  'git push --no-\verify' "$SHA"
+probar_vale BLOQUEA sigue   "válido · ANSI-C tampoco"               "git push \$'--no-verify'" "$SHA"
 
 echo "── ciclo completo · .githooks/pre-push con refs por stdin ──"
 probar_prepush pasa    borrado "una ref con el SHA autorizado" \
@@ -280,6 +327,11 @@ probar_prepush BLOQUEA borrado "borrado de rama (SHA a ceros)" \
   "(delete) $CEROS refs/heads/x $SHA" "$SHA"
 probar_prepush BLOQUEA borrado "sin vale" \
   "refs/heads/x $SHA refs/heads/x $CEROS" ""
+# `pre-push` lee sólo la primera línea. Tiene que seguir aceptando el vale
+# marcado —es el que le entrega la capa de Claude— y también los que no llevan
+# marca, que son los que emite el owner a mano.
+probar_prepush pasa    borrado "acepta el vale ya marcado" \
+  "refs/heads/x $SHA refs/heads/x $CEROS" "$MARCADO"
 
 echo
 echo "$total casos"

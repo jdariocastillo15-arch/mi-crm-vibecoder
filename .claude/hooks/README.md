@@ -50,11 +50,35 @@ para las dos puertas.
 
 | Operación | Capa de Claude | Puerta de git |
 | --- | --- | --- |
-| `git push` | valida y **lo deja** | valida y **lo consume** |
+| `git push` | valida y **lo marca** | valida y **lo consume** |
 | `gh` de escritura | valida y **lo consume** | no se ejecuta |
 
 Antes lo borraban las dos, así que un `git push` necesitaba **dos vales**. Ahora
 uno basta.
+
+**La marca** es una segunda línea con la palabra `entregado`:
+
+```
+0c0aab1e5f…
+entregado
+```
+
+La escribe la capa de Claude justo antes de delegar en la puerta de git, y a
+partir de ahí ese vale **está muerto para ella**: lo primero que hace, antes que
+ninguna otra comprobación, es mirar si el vale que tiene delante ya está
+marcado; si lo está, lo destruye y bloquea **sea cual sea la operación** —un
+push, un `gh`, un ensayo, un comando con dos—.
+
+Sin la marca, un push que no llegaba a la puerta de git —porque git falló antes,
+o porque una opción se saltó el hook— dejaba el vale entero y servía para otra
+publicación. Con ella, «un vale, una publicación» se cumple **en todo lo que
+cruza la capa de Claude**.
+
+La puerta de git **no mira la marca**: lee sólo la primera línea. Y tiene que
+seguir así, porque los vales que emite el owner a mano nunca la llevan.
+
+Marcar reescribe el fichero, así que **los 15 minutos pasan a contarse desde la
+entrega**, no desde que se emitió.
 
 La capa de Claude lo valida contra el **HEAD del worktree en curso**, no contra
 el de cualquiera: un vale emitido en un worktree no debe autorizar un
@@ -157,9 +181,20 @@ se lo comía, y `gh pr merge --help` acababa bloqueado—. **Sólo `--help`, nun
 `-h`**: en `gh auth login` el corto está tomado por `--hostname`, así que
 tratarlo como ayuda abriría un agujero en vez de cerrar una molestia.
 
-**`git push --no-verify` bloquea siempre**, ni con vale válido. Esa opción existe
-para no ejecutar los hooks, y la puerta de git es la única capa que protege este
-clon fuera de esta rama.
+**`git push --no-verify` bloquea siempre que el flag aparezca escrito**, ni con
+vale válido. Esa opción existe para no ejecutar los hooks, y la puerta de git es
+la única capa que protege este clon fuera de esta rama.
+
+«Escrito» quiere decir en cualquier forma estática, porque el disfraz no cambia
+lo que recibe git: `--no-verify` · `--no-\verify` · `--no""-verify` · partido con
+una continuación de línea · `$'--no-verify'` · `$'--no\x2dverify'` ·
+`$'--no\055verify'` · `$'--no\U0000002dverify'` · `$"--no-verify"`. Lo mismo con
+`--dry-run`.
+
+**Construirlo en tiempo de ejecución se escapa** —`V=--no-verify; git push $V`, o
+una sustitución que lo produzca—: saberlo exigiría ejecutar la shell. Ahí actúa
+la marca: el vale sale marcado, así que la publicación se hace sin segunda
+puerta pero **el vale muere en la siguiente operación que cruce esta capa**.
 
 **Se mira dentro de las comillas**, aparte del comando entero: si no, un
 `bash -c "…"` se cuela porque su primer token es `bash`.
@@ -170,6 +205,24 @@ y `pr\`, y el nombre ya no coincidía con nada. Lo mismo con
 `g""h pr merge 1` o con un alias en línea escapado. **No son ejecutables
 construidos** —el nombre va literal, solo vestido para la shell— así que no
 caen en el límite de más abajo: se ven y se bloquean.
+
+**Los flags se miran desvestidos, y `--help` no.** La asimetría es la regla, no
+una excepción: **se desviste cuando desvestir endurece**. `--no-verify` y
+`--dry-run` refuerzan la detección, así que hay que verlos aunque vengan
+disfrazados. `--help` la suprime —hace que la orden no cuente—, así que se mira
+crudo: desvestido, un `gh pr create --title "--help"` pasaría por una petición de
+ayuda de verdad.
+
+Puesto así, los dos flags dan igual qué vista gane el desempate. Arreglarlo sólo
+en el desempate lo habría tapado por casualidad, dejando el flag mal clasificado
+dentro de la vista cruda.
+
+**Y las continuaciones de línea se juntan antes de mirar nada.** Una barra al
+final de línea es continuación: `git push --no-\` + salto + `verify origin main`
+llega a git como `--no-verify` entero, pero al trocear por líneas salían un push
+del montón y un `verify origin main` que no es nada. Se juntan **después** de
+procesar los heredoc —que necesitan las líneas tal cual para encontrar su
+marcador de cierre— y **antes** de construir las vistas, así que aplica a las dos.
 
 Se calculan **las dos vistas** —como viene y desnuda— y se queda **la que ve
 más**, no la suma. Sumarlas convertía cualquier orden entrecomillada en «dos
@@ -221,6 +274,11 @@ Están escritos porque conviene saberlos, no porque den igual:
 - **`git push --no-verify` desde una terminal a mano no tiene ninguna puerta.**
   La de git no se ejecuta —para eso está la opción— y la de Claude no está. Es
   límite de los hooks de git, no de esta guarda.
+- **«Un vale, una publicación» se cumple en la capa de Claude, no fuera.** La
+  puerta de git acepta un vale marcado, y tiene que aceptarlo: los que emite el
+  owner a mano no llevan marca. Así que un vale marcado que sobreviva —porque el
+  asistente no volvió a pasar por su capa— **puede servir a una publicación
+  manual desde una terminal** dentro de sus 15 minutos.
 - **`git push --dry-run` queda frenado.** No es un descuido: git ejecuta
   `pre-push` también en los ensayos, así que no podía completarse de todos
   modos. Para ver qué saldría, `git log` y `git diff` contra el upstream.
@@ -259,7 +317,7 @@ Están escritos porque conviene saberlos, no porque den igual:
 bash .claude/hooks/prueba.sh
 ```
 
-**122 casos** en tres bloques:
+**141 casos** en tres bloques:
 
 - **Detección** — incluidos los dos falsos positivos reales, los rodeos
   evidentes (`bash -c`, ruta absoluta, `--repo` delante del verbo, prefijos y
@@ -270,8 +328,11 @@ bash .claude/hooks/prueba.sh
   cae del lado seguro. Incluye también los falsos positivos que se aceptan a
   propósito, para que consten como decisión y no como descuido. Cada caso puede exigir además **por qué**
   bloquea, no solo que bloquee.
-- **Ciclo del vale en la capa de Claude** — comprueba si el vale sigue o se
-  consume, que es donde estaba el defecto de las dos autorizaciones.
+- **Ciclo del vale en la capa de Claude** — comprueba si el vale sigue intacto,
+  queda **marcado** o se consume, que es donde estaban los dos defectos: el de
+  las dos autorizaciones y el del vale que sobrevivía a su propia publicación.
+  Los tres estados se distinguen a propósito: confundir «marcado» con «intacto»
+  era justamente el fallo.
 - **Ciclo completo de `.githooks/pre-push`** con refs por la entrada estándar:
   una ref, varias refs, borrados, vale de otro commit y sin vale.
 
