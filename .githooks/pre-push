@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+#
+# Segunda capa: frena el push aunque no venga del asistente —terminal a mano,
+# botón del editor, script—. Comparte el mismo vale que la guarda de Claude,
+# y es quien lo CONSUME: la capa de Claude lo valida y lo deja pasar, porque
+# si lo borrase ella haría falta autorizar dos veces el mismo push.
+#
+# Se activa con:  git config core.hooksPath .githooks
+# (mientras tanto hay una copia idéntica en `.git/hooks/pre-push`)
+
+set -uo pipefail
+
+MINUTOS_VALIDO=15
+CEROS=0000000000000000000000000000000000000000
+
+# El vale vive SIEMPRE en el worktree principal, para que esta capa y la de
+# Claude miren el mismo fichero. `--show-toplevel` no sirve: desde un worktree
+# devuelve el worktree, y entonces son dos ficheros distintos.
+raiz=$(git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
+[ -n "$raiz" ] || raiz=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+vale="$raiz/.claude/push-autorizado"
+
+# ---------------------------------------------------------------------------
+# Qué se va a publicar
+#
+# Git lo pasa por la entrada estándar, una línea por ref:
+#     <ref local> <sha local> <ref remota> <sha remota>
+#
+# Es más preciso que `git rev-parse HEAD`: desde un worktree, o empujando una
+# rama que no es la actual, HEAD no es lo que sale.
+# ---------------------------------------------------------------------------
+n=0
+sha_saliente=""
+detalle=""
+borrados=""
+
+while read -r ref_local sha_local ref_remota _; do
+  [ -n "${ref_local}${sha_local}" ] || continue
+  if [ "$sha_local" = "$CEROS" ]; then
+    borrados="$borrados ${ref_remota:-?}"
+    continue
+  fi
+  n=$((n + 1))
+  sha_saliente="$sha_local"
+  detalle="$detalle
+    ${sha_local:0:7}  →  ${ref_remota:-?}"
+done
+
+rechazar() {
+  echo >&2
+  echo "  ✗ Push bloqueado — $1" >&2
+  shift
+  for linea in "$@"; do echo "    $linea" >&2; done
+  echo >&2
+  rm -f "$vale"          # esta es la última puerta: el vale se consume igual
+  exit 1
+}
+
+# ---- Borrar ramas del remoto no pasa por el vale ----
+# Un borrado no tiene commit que autorizar, así que NO cae por fallback a HEAD
+# en silencio: se dice lo que es.
+if [ -n "$borrados" ]; then
+  rechazar "borrar ramas del remoto no pasa por el vale." \
+    "Ramas:$borrados" \
+    "" \
+    "El vale autoriza un commit, y un borrado no tiene commit que" \
+    "enseñar ni que atar. Hazlo tú a mano si es lo que quieres."
+fi
+
+# ---- Un vale, una publicación ----
+# No basta con que todas las refs apunten al SHA autorizado: publicar el mismo
+# commit en dos ramas remotas siguen siendo dos publicaciones.
+if [ "$n" -gt 1 ]; then
+  rechazar "el push lleva $n refs, y un vale autoriza UNA publicación." \
+    "Sale:$detalle" \
+    "" \
+    "Empuja una rama cada vez y autoriza cada una."
+fi
+
+aviso_sin_stdin=""
+if [ "$n" -eq 0 ]; then
+  # Invocación sin refs por stdin —a mano, o sólo borrados ya rechazados—.
+  # Se cae a HEAD, pero con aviso: no en silencio.
+  sha_saliente=$(git rev-parse HEAD 2>/dev/null)
+  detalle="
+    ${sha_saliente:0:7}  →  (HEAD, sin refs por la entrada estándar)"
+  aviso_sin_stdin="AVISO: git no pasó refs por stdin; se ha usado HEAD."
+fi
+
+# ---- El vale ----
+if [ -f "$vale" ]; then
+  autorizado=$(head -n1 "$vale" | tr -d '[:space:]')
+  reciente=$(find "$vale" -mmin "-$MINUTOS_VALIDO" 2>/dev/null)
+
+  if [ "$autorizado" = "$sha_saliente" ] && [ -n "$reciente" ]; then
+    rm -f "$vale"                       # de un solo uso
+    exit 0
+  fi
+
+  if [ "$autorizado" != "$sha_saliente" ]; then
+    rechazar "el vale no corresponde a lo que sale." \
+      "Vale emitido para: ${autorizado:0:7}" \
+      "Sale:$detalle" \
+      "${aviso_sin_stdin:-}"
+  fi
+  rechazar "el vale ha caducado (más de $MINUTOS_VALIDO minutos)." \
+    "Sale:$detalle"
+fi
+
+rechazar "requiere autorización literal del owner." \
+  "Sale:$detalle" \
+  "Rama: $(git rev-parse --abbrev-ref HEAD 2>/dev/null)" \
+  "${aviso_sin_stdin:-}" \
+  "" \
+  "Si eres el owner y quieres subirlo, emite el vale y repite el push:" \
+  "" \
+  "    printf '%s' \"\$(git rev-parse HEAD)\" > .claude/push-autorizado" \
+  "    git push ..." \
+  "" \
+  "Un solo uso, caduca en $MINUTOS_VALIDO minutos, atado a ese commit."

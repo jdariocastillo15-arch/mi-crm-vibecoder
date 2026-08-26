@@ -30,3 +30,6 @@ TMP (TEMPORAL)/
 
 # TypeScript
 *.tsbuildinfo
+
+# Vale de autorización de push — nunca se versiona
+.claude/push-autorizado
