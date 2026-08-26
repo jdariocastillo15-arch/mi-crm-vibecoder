@@ -141,6 +141,17 @@ las palabras de control—, cada una tapada caso a caso mientras la clase seguí
 abierta. Barrer la cierra entera: es un superconjunto estricto de lo que se
 detectaba antes, así que no puede perder nada que ya se viera.
 
+**Los metacaracteres se despegan antes de trocear.** `case x in x)gh pr merge 1`
+es sintaxis válida de bash, y partiendo solo por espacios salía el token `x)gh`,
+cuyo nombre no es `gh`: el barrido no veía nada. Se separan `(`, `)`, `{`, `}`,
+`<`, `>` y `!` — este último porque un alias en línea los pega
+(`git -c alias.m="!gh pr merge 1" m`). El `=` **no** se toca: partiría
+`--method=POST` y `-fbody=x`, que hay que ver enteros.
+
+Y los argumentos **no cruzan un metacaracter**: en `$(which gh)` el `)` cierra
+el comando en vez de ser un argumento de `gh`. Sin ese corte, comprobar si `gh`
+está instalado quedaba bloqueado.
+
 **`--help` pasa**, y se mira **antes** de descartar opciones —era justo ahí donde
 se lo comía, y `gh pr merge --help` acababa bloqueado—. **Sólo `--help`, nunca
 `-h`**: en `gh auth login` el corto está tomado por `--hostname`, así que
@@ -166,11 +177,13 @@ clon fuera de esta rama.
   comando que abre el heredoc: si es una shell, el cuerpo se clasifica como
   cualquier otro fragmento; si no, se descarta.
 
-  El receptor es el **último comando de la línea**, no el primero. Mirando la
-  línea entera, un `cd /tmp && bash <<EOF` identificaba `cd`, decidía que el
-  cuerpo era texto y se tragaba el merge que llevaba dentro. Es la única parte
-  que sigue preguntando «¿qué comando es este?» en vez de barrer, porque aquí la
-  pregunta es precisamente quién recibe el cuerpo.
+  La pregunta es **si hay una shell en la línea que abre el heredoc**, no cuál
+  de los comandos lo recibe. Localizar al receptor exigía entender `&&`, luego
+  `then`, luego `case x in x)`… y cada intento dejaba un hueco: en
+  `cd /tmp && bash <<EOF` se identificaba `cd`, se daba el cuerpo por texto y se
+  tragaba el merge que llevaba dentro. Es la misma lección que en el barrido —
+  preguntar si aparece, no dónde—, y cae del lado seguro: como mucho se
+  clasifica un cuerpo que solo era texto.
 
 ### La puerta de git, en detalle
 
@@ -213,7 +226,10 @@ Están escritos porque conviene saberlos, no porque den igual:
   `G=gh; $G pr merge 1`, `$(printf gh) pr merge 1` y `g""h pr merge 1`, y que
   una función o un alias definidos antes tampoco se ven al usarlos —de un
   `alias p="gh pr merge"; p 1` se ve la definición entrecomillada, no la
-  llamada—. Cerrar esto exigiría bloquear toda esa sintaxis, no reconocerla.
+  llamada—. Un alias en línea de git sí se ve si el payload trae la palabra
+  literal —`git -c alias.m="!gh pr merge 1" m` bloquea—, pero no si la construye
+  —`git -c alias.m="!$G pr merge" m` pasa—. Cerrar esto exigiría bloquear toda
+  esa sintaxis, no reconocerla.
   Entra de lleno en el «asistente que decide saltárselo» de más arriba, pero
   conviene tenerlo nombrado y no darlo por cubierto.
 - **La matriz crea vales reales** mientras corre, unos milisegundos, con un
@@ -225,11 +241,12 @@ Están escritos porque conviene saberlos, no porque den igual:
 bash .claude/hooks/prueba.sh
 ```
 
-**101 casos** en tres bloques:
+**113 casos** en tres bloques:
 
 - **Detección** — incluidos los dos falsos positivos reales, los rodeos
   evidentes (`bash -c`, ruta absoluta, `--repo` delante del verbo, prefijos y
-  envoltorios, palabras de control, `eval`, agrupaciones), las sustituciones de
+  envoltorios, palabras de control, `eval`, agrupaciones, metacaracteres
+  pegados), las sustituciones de
   comando y subshells, los heredoc que ejecutan frente a los que solo escriben,
   las formas de `gh api`, y un verbo inventado para comprobar que lo desconocido
   cae del lado seguro. Incluye también los falsos positivos que se aceptan a

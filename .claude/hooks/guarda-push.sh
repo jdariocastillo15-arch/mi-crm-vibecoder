@@ -66,77 +66,21 @@ GH_LECTURA = {
 # `-X` que se comía el endpoint como si fuera el método (`gh api -X repos/o/r`).
 METODOS_LECTURA = {"GET", "HEAD", "OPTIONS"}
 
-# Envoltorios que pasan argv tal cual al siguiente comando, con las opciones
-# de cada uno que se comen el argumento siguiente. Sin esto,
-# `GH_REPO=o/r gh pr merge 1` no se veía: el primer token era la asignación.
-#
-# `bash`, `sh` y `zsh` NO están aquí a propósito: esos no pasan argv tal cual,
-# y lo suyo ya lo cubre el escaneo de cadenas entrecomilladas.
-ENVOLTORIOS = {
-    "env":     {"-u", "--unset"},
-    "sudo":    {"-u", "--user", "-g", "--group", "-p", "--prompt", "-C"},
-    "nice":    {"-n", "--adjustment"},
-    "xargs":   {"-I", "-i", "-L", "-n", "-P", "-s", "-E", "-d", "-a",
-                "--replace", "--max-lines", "--max-args", "--max-procs",
-                "--max-chars", "--delimiter", "--eof", "--arg-file"},
-    "stdbuf":  {"-i", "-o", "-e", "--input", "--output", "--error"},
-    "nohup":   set(),
-    "time":    set(),
-    "command": set(),
-    "builtin": set(),
-    "exec":    set(),
-    "setsid":  set(),
-}
-
 REALES = ("git", "gh", "git-push")
 
+# Metacaracteres que la shell separa aunque vayan pegados al comando. Sin
+# despegarlos, `case x in x)gh pr merge 1` —sintaxis válida— daba el token
+# `x)gh`, cuyo basename no es `gh`, y el barrido no veía nada. Lo mismo con un
+# `!` pegado dentro de un alias en línea.
+#
+# `=` NO entra: partiría `--method=POST` y `-fbody=x`, que hay que ver enteros.
+METACARACTERES = r"[(){}<>!]"
+CIERRES = {"(", ")", "{", "}", "<", ">", "!"}
 
-# Palabras de control de la shell. No son comandos: `then bash <<EOF` lo recibe
-# `bash`, no `then`.
-CONTROL = {"{", "}", "!", "then", "else", "elif", "do", "done", "fi", "esac",
-           "if", "while", "until", "for", "case", "in", "select", "function",
-           "coproc", "eval"}
 
-
-def desenvolver(piezas):
-    """Quita asignaciones, palabras de control y envoltorios.
-
-    Ya NO se usa para detectar —de eso se encarga `operaciones_en`, barriendo
-    todas las posiciones—. Sigue haciendo falta aquí para una pregunta muy
-    concreta: quién recibe un heredoc, que sí es un comando concreto y no
-    "cualquier aparición".
-    """
-    i, hubo_envoltorio = 0, False
-    while i < len(piezas):
-        p = piezas[i]
-        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", p):        # VAR=valor
-            i += 1
-            continue
-        if p in CONTROL:
-            i += 1
-            continue
-        nombre = p.rsplit("/", 1)[-1]
-        if nombre in ENVOLTORIOS:
-            hubo_envoltorio = True
-            con_valor = ENVOLTORIOS[nombre]
-            i += 1
-            while i < len(piezas) and piezas[i].startswith("-"):
-                i += 2 if piezas[i] in con_valor else 1
-            continue
-        break
-
-    resto = piezas[i:]
-
-    # Red de seguridad. Si tras un envoltorio no hemos aterrizado en git/gh,
-    # puede ser que una opción suya llevara un valor que no está en la tabla
-    # —`nice -n 10 git push`, `xargs -I {} gh pr merge {}`—. Se busca el primer
-    # git/gh que quede. Cuesta algún falso positivo (`nice -n 10 echo git`),
-    # que es el lado bueno del error.
-    if hubo_envoltorio and (not resto or resto[0].rsplit("/", 1)[-1] not in REALES):
-        for j, p in enumerate(resto):
-            if p.rsplit("/", 1)[-1] in REALES:
-                return resto[j:]
-    return resto
+def trocear(texto):
+    """Tokens, con los metacaracteres despegados del comando."""
+    return re.sub(METACARACTERES, r" \g<0> ", texto).split()
 
 
 def sin_opciones(piezas, con_valor):
@@ -251,8 +195,8 @@ def clasificar(piezas):
 # como cualquier otro fragmento. Borrarlos todos por igual dejaba pasar una
 # publicación entera.
 #
-# Así que se mira el comando que abre cada heredoc: si es una shell, el cuerpo
-# se guarda para clasificarlo; si no, se descarta como hasta ahora.
+# Así que se mira si hay una shell en la línea que lo abre: si la hay, el cuerpo
+# se guarda para clasificarlo; si no, se descarta como texto.
 # ---------------------------------------------------------------------------
 cuerpos = []
 
@@ -260,14 +204,14 @@ cuerpos = []
 def _heredoc(m):
     inicio = m.string.rfind("\n", 0, m.start()) + 1
     cabecera = m.string[inicio:m.start()]
-    # Quien recibe el cuerpo es el ÚLTIMO comando de la línea, no el primero:
-    # en `cd /tmp && bash <<EOF` el cuerpo se lo come `bash`. Mirando la línea
-    # entera se identificaba `cd`, y el cuerpo se descartaba con un merge dentro.
-    # Mismo troceador que abajo, para que las dos partes no discrepen.
-    ultimo = re.split(r"[;&|]+", cabecera)[-1]
-    piezas = desenvolver(ultimo.split())
-    ejecutable = piezas[0].rsplit("/", 1)[-1] if piezas else ""
-    if ejecutable in SHELLS:
+    # Se pregunta por CUALQUIER token de la cabecera, no por "cuál es el
+    # comando". Localizarlo exigía entender `&&`, luego `then`, luego
+    # `case x in x)`… y cada intento dejaba un hueco: en `cd /tmp && bash <<EOF`
+    # se identificaba `cd` y el cuerpo se tragaba con un merge dentro.
+    #
+    # Es la misma leccion que en el barrido: preguntar si aparece, no donde.
+    # Del lado seguro: como mucho se clasifica un cuerpo que era solo texto.
+    if any(t.rsplit("/", 1)[-1] in SHELLS for t in trocear(cabecera)):
         cuerpos.append(m.group(0))
     return " "
 
@@ -321,13 +265,20 @@ def operaciones_en(trozo):
     los envoltorios, luego las sustituciones, después las palabras de control.
     Barrer cierra la clase entera en vez de ir tapándola caso a caso.
     """
-    piezas = trozo.split()
+    piezas = trocear(trozo)
     fuera = []
     for i, p in enumerate(piezas):
-        if p.rsplit("/", 1)[-1] in REALES:
-            c = clasificar(piezas[i:])
-            if c:
-                fuera.append(c)
+        if p.rsplit("/", 1)[-1] not in REALES:
+            continue
+        # Los argumentos no cruzan un metacaracter: en `$(which gh)` el `)`
+        # cierra el comando, no es un argumento de `gh`. Sin este corte, ese
+        # `gh` quedaba seguido de `)` y salía clasificado como escritura.
+        j = i + 1
+        while j < len(piezas) and piezas[j] not in CIERRES:
+            j += 1
+        c = clasificar(piezas[i:j])
+        if c:
+            fuera.append(c)
     return fuera
 
 

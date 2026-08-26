@@ -180,6 +180,21 @@ probar BLOQUEA "bash -s <<EOF" \
 probar pasa    "cd && cat <<FIN sigue siendo texto" \
        "$(printf 'cd /tmp && cat > f <<%sFIN%s\ngit push -u origin x\nFIN\n' "'" "'")"
 
+echo "── defecto 17 · metacaracteres pegados al comando ──"
+probar BLOQUEA "case sin espacio tras el paréntesis" 'case x in x)gh pr merge 1 --merge;;esac' 'gh pr merge'
+probar BLOQUEA "case sin espacio, con git"          'case x in x)git push;;esac'
+probar BLOQUEA "llaves pegadas"                     '{gh pr merge 1;}'
+probar BLOQUEA "paréntesis pegado"                  '(gh pr merge 1)'
+probar BLOQUEA "alias en línea con ! pegado"        'git -c alias.m="!gh pr merge 1 --merge" m' 'gh pr merge'
+probar BLOQUEA "heredoc dentro de un case" \
+       "$(printf 'case x in x) bash <<%sEOF%s\ngh pr merge 1 --merge\nEOF\n;; esac\n' "'" "'")" 'gh pr merge'
+probar pasa    "un ! que no esconde nada"           '[ ! -f x ] && git log --oneline'
+probar pasa    "redirección normal"                 'git log --oneline > /tmp/x'
+probar pasa    "comprobar si gh está instalado"     'which gh'
+probar pasa    "lo mismo en una sustitución"        'echo "$(which gh)"'
+probar pasa    "command -v en una sustitución"      'test -n "$(command -v git)"'
+probar pasa    "lectura de gh dentro de un subshell" '(gh pr list --state open)'
+
 echo "── el precio del barrido, comprobado a propósito ──"
 probar pasa    "mensaje que menciona «el push»"  'git commit -m "arregla el push del formulario"'
 probar BLOQUEA "mensaje que menciona el verbo"   'git commit -m "arregla el gh pr merge"'
