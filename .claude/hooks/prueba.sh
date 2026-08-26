@@ -1,23 +1,101 @@
 #!/usr/bin/env bash
-# Matriz de la guarda: cada caso se le pasa al hook tal como se lo pasaría
-# Claude Code, y se comprueba si bloquea (código != 0) o deja pasar.
-cd "/Users/dariocastillo/Documents/proyectos web/VIBE CRM - PRD" || exit 1
-GUARDA=.claude/hooks/guarda-push.sh
-fallos=0
+#
+# Matriz de la guarda. Tres bloques:
+#
+#   1. DETECCIÓN — a la capa de Claude se le pasa el comando tal como se lo
+#      pasaría Claude Code, y se comprueba si bloquea y POR QUÉ.
+#   2. CICLO DEL VALE en la capa de Claude — además del código de salida se
+#      comprueba si el vale sigue o se ha consumido.
+#   3. CICLO COMPLETO de `.githooks/pre-push`, con refs por la entrada estándar.
+#
+# AVISO: los bloques 2 y 3 escriben vales REALES durante unos milisegundos.
+# Hay un `trap` que los borra pase lo que pase, pero no ejecutes esto en mitad
+# de un push.
 
-probar() {
-  local esperado="$1" descripcion="$2" comando="$3"
-  local codigo real
+RAIZ=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+cd "$RAIZ" || exit 1
+
+GUARDA="$RAIZ/.claude/hooks/guarda-push.sh"
+PREPUSH="$RAIZ/.githooks/pre-push"
+VALE="$RAIZ/.claude/push-autorizado"
+CEROS=0000000000000000000000000000000000000000
+SHA=$(git rev-parse HEAD)
+OTRO=0123456789abcdef0123456789abcdef01234567
+
+trap 'rm -f "$VALE"' EXIT INT TERM
+
+fallos=0
+total=0
+
+# Empaqueta el comando como se lo entrega Claude Code al hook.
+entrada() {
   python3 -c '
 import json, sys
 print(json.dumps({"tool_name": "Bash", "tool_input": {"command": sys.argv[1]}}))
-' "$comando" | bash "$GUARDA" >/dev/null 2>&1
+' "$1"
+}
+
+# probar <pasa|BLOQUEA> <descripción> <comando> [texto esperado en la salida]
+#
+# El cuarto argumento importa más de lo que parece: sin él, "bloqueó por llevar
+# dos publicaciones" y "bloqueó por falta de vale" son indistinguibles.
+probar() {
+  local esperado="$1" descripcion="$2" comando="$3" texto="${4:-}"
+  local codigo real salida
+  total=$((total + 1))
+  salida=$(entrada "$comando" | bash "$GUARDA" 2>&1)
   codigo=$?
   real="pasa"; [ "$codigo" -ne 0 ] && real="BLOQUEA"
-  if [ "$real" = "$esperado" ]; then
-    printf '  ok    %-8s  %s\n' "$real" "$descripcion"
-  else
+
+  if [ "$real" != "$esperado" ]; then
     printf '  FALLO esperaba %s, dio %s  ·  %s\n' "$esperado" "$real" "$descripcion"
+    fallos=$((fallos + 1)); return
+  fi
+  if [ -n "$texto" ] && ! printf '%s' "$salida" | grep -qF -- "$texto"; then
+    printf '  FALLO %s pero sin «%s»  ·  %s\n' "$real" "$texto" "$descripcion"
+    fallos=$((fallos + 1)); return
+  fi
+  printf '  ok    %-8s  %s\n' "$real" "$descripcion"
+}
+
+# probar_vale <pasa|BLOQUEA> <sigue|borrado> <descripción> <comando> <sha del vale>
+probar_vale() {
+  local esperado="$1" vale_esperado="$2" descripcion="$3" comando="$4" sha_vale="$5"
+  local codigo real real_vale
+  total=$((total + 1))
+  printf '%s' "$sha_vale" > "$VALE"
+  entrada "$comando" | bash "$GUARDA" >/dev/null 2>&1
+  codigo=$?
+  real="pasa"; [ "$codigo" -ne 0 ] && real="BLOQUEA"
+  real_vale="sigue"; [ -f "$VALE" ] || real_vale="borrado"
+  rm -f "$VALE"
+
+  if [ "$real" = "$esperado" ] && [ "$real_vale" = "$vale_esperado" ]; then
+    printf '  ok    %-8s vale %-8s %s\n' "$real" "$real_vale" "$descripcion"
+  else
+    printf '  FALLO esperaba %s/%s, dio %s/%s  ·  %s\n' \
+      "$esperado" "$vale_esperado" "$real" "$real_vale" "$descripcion"
+    fallos=$((fallos + 1))
+  fi
+}
+
+# probar_prepush <pasa|BLOQUEA> <sigue|borrado> <descripción> <stdin> <sha del vale o vacío>
+probar_prepush() {
+  local esperado="$1" vale_esperado="$2" descripcion="$3" refs="$4" sha_vale="$5"
+  local codigo real real_vale
+  total=$((total + 1))
+  if [ -n "$sha_vale" ]; then printf '%s' "$sha_vale" > "$VALE"; else rm -f "$VALE"; fi
+  printf '%s\n' "$refs" | bash "$PREPUSH" origin git@github.com:o/r.git >/dev/null 2>&1
+  codigo=$?
+  real="pasa"; [ "$codigo" -ne 0 ] && real="BLOQUEA"
+  real_vale="sigue"; [ -f "$VALE" ] || real_vale="borrado"
+  rm -f "$VALE"
+
+  if [ "$real" = "$esperado" ] && [ "$real_vale" = "$vale_esperado" ]; then
+    printf '  ok    %-8s vale %-8s %s\n' "$real" "$real_vale" "$descripcion"
+  else
+    printf '  FALLO esperaba %s/%s, dio %s/%s  ·  %s\n' \
+      "$esperado" "$vale_esperado" "$real" "$real_vale" "$descripcion"
     fallos=$((fallos + 1))
   fi
 }
@@ -60,5 +138,78 @@ probar BLOQUEA "api con método de escritura"         'gh api -X POST repos/owne
 probar BLOQUEA "api con campos"                      'gh api repos/owner/repo -f name=z'
 probar BLOQUEA "verbo desconocido, lado seguro"      'gh pr inventado-manana'
 
+echo "── defectos 1 y 4 · el ensayo exime sólo a su fragmento, y sólo en git ──"
+probar BLOQUEA "ensayo de git + merge de gh: el gh se ve igual" \
+       'git push --dry-run origin main && gh pr merge 1 --merge' 'gh pr merge 1 --merge'
+probar BLOQUEA "el mismo par, al revés" \
+       'gh pr merge 1 && git push --dry-run' 'gh pr merge 1'
+probar BLOQUEA "gh pr create --dry-run: puede empujar igual" 'gh pr create --dry-run --title x'
+probar BLOQUEA "gh pr merge --dry-run"                       'gh pr merge 1 --dry-run'
+probar BLOQUEA "el ensayo no exime a un push de verdad detrás" \
+       'git push --dry-run && git push' 'COMMITS PENDIENTES'
+
+echo "── defectos 2 y 5 · un vale, una publicación ──"
+probar BLOQUEA "dos escrituras distintas"      'gh pr merge 1 && gh pr edit 2'         '2 operaciones'
+probar BLOQUEA "dos escrituras IDÉNTICAS"      'gh pr comment 1 --body hola && gh pr comment 1 --body hola' '2 operaciones'
+probar BLOQUEA "tres seguidas"                 'gh pr merge 1 ; gh pr edit 2 ; gh pr close 3' '3 operaciones'
+probar BLOQUEA "echo del comando: el precio documentado" 'echo "git push" && git push' '2 operaciones'
+probar BLOQUEA "un PR normal NO se infla a 2"  'gh pr create --title "algo" --body "otro"' 'COMMITS PENDIENTES'
+
+echo "── defecto 7 · prefijos y envoltorios ──"
+probar BLOQUEA "asignación delante"            'GH_REPO=o/r gh pr merge 1'
+probar BLOQUEA "dos asignaciones"              'FOO=1 BAR=2 git push'
+probar BLOQUEA "env"                           'env gh pr merge 1'
+probar BLOQUEA "env con -u"                    'env -u GIT_DIR git push'
+probar BLOQUEA "command"                       'command git push'
+probar BLOQUEA "sudo"                          'sudo git push'
+probar BLOQUEA "nice con -n 10"                'nice -n 10 git push'
+probar BLOQUEA "xargs con -I {}"               'xargs -I {} gh pr merge {}'
+probar BLOQUEA "envoltorio + asignación"       'env GH_TOKEN=x gh release create v1'
+
+echo "── defecto 3 · gh api en todas sus formas ──"
+probar BLOQUEA "método pegado -XPOST"          'gh api -XPOST repos/o/r/issues'
+probar BLOQUEA "método con = "                 'gh api --method=POST repos/o/r'
+probar BLOQUEA "método separado en minúscula"  'gh api -X delete repos/o/r'
+probar BLOQUEA "campo pegado -fbody=x"         'gh api repos/o/r -fbody=x'
+probar BLOQUEA "campo pegado -Fbody=x"         'gh api repos/o/r -Fbody=x'
+probar BLOQUEA "--input con = "                'gh api repos/o/r --input=fichero.json'
+probar BLOQUEA "-X se come el endpoint como método" 'gh api -X repos/o/r'
+probar BLOQUEA "método inventado"              'gh api -X FUSIONAR repos/o/r'
+probar pasa    "-X GET sí es lectura"          'gh api -X GET repos/o/r'
+
+echo "── defectos 10 y 11 · ayuda y --no-verify ──"
+probar pasa    "la ayuda de un verbo de escritura"   'gh pr merge --help'
+probar pasa    "la ayuda de pr create"               'gh pr create --help'
+probar pasa    "la ayuda general"                    'gh --help'
+probar BLOQUEA "--help entrecomillado como valor"    'gh pr create --title "--help"'
+probar BLOQUEA "--no-verify pelado"                  'git push --no-verify'          'no-verify'
+probar BLOQUEA "--no-verify con destino"             'git push --no-verify origin main' 'no-verify'
+
+echo "── el informe enseña el comando exacto ──"
+probar BLOQUEA "el destino -R sale en el informe"    'gh pr merge 1 -R otro/repo'    '-R otro/repo'
+
+echo "── ciclo del vale · capa de Claude ──"
+probar_vale pasa    sigue   "git push NO consume: lo hará pre-push"  'git push'              "$SHA"
+probar_vale pasa    borrado "gh de escritura sí consume"             'gh pr create -t x'     "$SHA"
+probar_vale BLOQUEA sigue   "--no-verify: el vale no lo salva"       'git push --no-verify'  "$SHA"
+probar_vale BLOQUEA borrado "vale de otro commit: se destruye"       'git push'              "$OTRO"
+
+echo "── ciclo completo · .githooks/pre-push con refs por stdin ──"
+probar_prepush pasa    borrado "una ref con el SHA autorizado" \
+  "refs/heads/x $SHA refs/heads/x $CEROS" "$SHA"
+probar_prepush BLOQUEA borrado "dos refs, una con otro SHA" \
+  "refs/heads/x $SHA refs/heads/x $CEROS
+refs/heads/y $OTRO refs/heads/y $CEROS" "$SHA"
+probar_prepush BLOQUEA borrado "dos refs con el MISMO SHA autorizado" \
+  "refs/heads/x $SHA refs/heads/x $CEROS
+refs/heads/y $SHA refs/heads/y $CEROS" "$SHA"
+probar_prepush BLOQUEA borrado "vale de otro commit" \
+  "refs/heads/x $SHA refs/heads/x $CEROS" "$OTRO"
+probar_prepush BLOQUEA borrado "borrado de rama (SHA a ceros)" \
+  "(delete) $CEROS refs/heads/x $SHA" "$SHA"
+probar_prepush BLOQUEA borrado "sin vale" \
+  "refs/heads/x $SHA refs/heads/x $CEROS" ""
+
 echo
-if [ "$fallos" -eq 0 ]; then echo "TODOS EN VERDE"; else echo "$fallos FALLO(S)"; fi
+echo "$total casos"
+if [ "$fallos" -eq 0 ]; then echo "TODOS EN VERDE"; else echo "$fallos FALLO(S)"; exit 1; fi
