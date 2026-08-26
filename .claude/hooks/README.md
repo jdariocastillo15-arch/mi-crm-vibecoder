@@ -244,13 +244,32 @@ caso la vista cruda ve más, y por eso el máximo es el número bueno.
   comando que abre el heredoc: si es una shell, el cuerpo se clasifica como
   cualquier otro fragmento; si no, se descarta.
 
-  La pregunta es **si hay una shell en la línea que abre el heredoc**, no cuál
-  de los comandos lo recibe. Localizar al receptor exigía entender `&&`, luego
+  La pregunta es **si hay una shell en la cabecera que abre el heredoc**, no
+  cuál de los comandos lo recibe. Localizar al receptor exigía entender `&&`, luego
   `then`, luego `case x in x)`… y cada intento dejaba un hueco: en
   `cd /tmp && bash <<EOF` se identificaba `cd`, se daba el cuerpo por texto y se
   tragaba el merge que llevaba dentro. Es la misma lección que en el barrido —
   preguntar si aparece, no dónde—, y cae del lado seguro: como mucho se
   clasifica un cuerpo que solo era texto.
+
+  Y la cabecera que se mira es la **lógica, no la línea física**. Una barra al
+  final de línea junta las dos antes de ejecutar nada, así que esto lo recibe
+  bash —comprobado con un eco inocente, en bash y en zsh—:
+
+  ```bash
+  b\
+  ash <<'EOF'
+  ```
+
+  Leyendo la línea física salía `ash`, que no es ninguna shell, y el cuerpo se
+  daba por texto con lo que llevara dentro. Se retrocede mientras la línea
+  anterior acabe en barra, lo que solo puede **añadir** tokens a la cabecera.
+
+  Se hace ahí, y no juntando las continuaciones del comando entero antes de
+  buscar heredocs: eso reescribiría también los **cuerpos**, y una línea del
+  cuerpo acabada en barra se tragaría el marcador de cierre. El heredoc dejaría
+  de reconocerse entero y un `cat > f` normal pasaría a barrerse como si fueran
+  órdenes.
 
 ### La puerta de git, en detalle
 
@@ -317,7 +336,7 @@ Están escritos porque conviene saberlos, no porque den igual:
 bash .claude/hooks/prueba.sh
 ```
 
-**141 casos** en tres bloques:
+**145 casos** en tres bloques:
 
 - **Detección** — incluidos los dos falsos positivos reales, los rodeos
   evidentes (`bash -c`, ruta absoluta, `--repo` delante del verbo, prefijos y

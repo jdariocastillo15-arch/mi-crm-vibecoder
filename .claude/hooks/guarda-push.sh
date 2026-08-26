@@ -259,9 +259,31 @@ def clasificar(piezas):
 cuerpos = []
 
 
+def _cabecera_logica(texto, fin):
+    """La cabecera LOGICA del heredoc, no la linea fisica.
+
+    Una barra al final de linea la junta con la siguiente ANTES de ejecutar
+    nada, asi que `b\\` + salto + `ash <<EOF` lo recibe bash. Cortando por el
+    salto se leia `ash`, que no es ninguna shell, y el cuerpo se descartaba
+    como texto con lo que llevara dentro.
+
+    Se retrocede mientras la linea anterior acabe en barra. Retroceder solo
+    puede ANADIR tokens a la cabecera, nunca quitarlos, asi que cae del lado
+    seguro: como mucho se clasifica un cuerpo que solo era texto.
+
+    Se hace aqui y no juntando el comando entero antes de buscar heredocs:
+    eso reescribiria tambien los CUERPOS, y una linea del cuerpo acabada en
+    barra se tragaria el marcador de cierre. El heredoc dejaria de reconocerse
+    entero y un `cat > f` normal pasaria a barrerse como si fueran ordenes.
+    """
+    inicio = texto.rfind("\n", 0, fin) + 1
+    while inicio >= 2 and texto[inicio - 2] == "\\":
+        inicio = texto.rfind("\n", 0, inicio - 1) + 1
+    return unir_lineas(texto[inicio:fin])
+
+
 def _heredoc(m):
-    inicio = m.string.rfind("\n", 0, m.start()) + 1
-    cabecera = m.string[inicio:m.start()]
+    cabecera = _cabecera_logica(m.string, m.start())
     # Se pregunta por CUALQUIER token de la cabecera, no por "cuál es el
     # comando". Localizarlo exigía entender `&&`, luego `then`, luego
     # `case x in x)`… y cada intento dejaba un hueco: en `cd /tmp && bash <<EOF`

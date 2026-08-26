@@ -191,6 +191,20 @@ probar BLOQUEA "bash -s <<EOF" \
 probar pasa    "cd && cat <<FIN sigue siendo texto" \
        "$(printf 'cd /tmp && cat > f <<%sFIN%s\ngit push -u origin x\nFIN\n' "'" "'")"
 
+echo "── defecto 20 · la cabecera del heredoc, partida ──"
+# `b\` + salto + `ash <<EOF` lo ejecuta bash: comprobado con un eco inocente en
+# bash y en zsh. Mirando la línea física se leía `ash`, que no es una shell, y
+# el cuerpo se daba por texto con un merge dentro.
+probar BLOQUEA "cabecera partida en dos" \
+       "$(printf 'b\\\nash <<%sEOF%s\ngh pr merge 1 --merge\nEOF\n' "'" "'")" 'gh pr merge'
+probar BLOQUEA "cabecera partida, con un cd delante" \
+       "$(printf 'cd /tmp && b\\\nash <<%sEOF%s\ngit push\nEOF\n' "'" "'")"
+probar BLOQUEA "cabecera partida en tres" \
+       "$(printf 'b\\\na\\\nsh <<%sEOF%s\ngh pr merge 1 --merge\nEOF\n' "'" "'")" 'gh pr merge'
+# Y el control: retroceder no puede convertir en shell lo que no lo es.
+probar pasa    "cat partido sigue siendo texto" \
+       "$(printf 'ca\\\nt > f <<%sFIN%s\ngit push -u origin x\nFIN\n' "'" "'")"
+
 echo "── defecto 17 · metacaracteres pegados al comando ──"
 probar BLOQUEA "case sin espacio tras el paréntesis" 'case x in x)gh pr merge 1 --merge;;esac' 'gh pr merge'
 probar BLOQUEA "case sin espacio, con git"          'case x in x)git push;;esac'
