@@ -46,9 +46,9 @@ except Exception:
 
 cmd = datos.get("tool_input", {}).get("command", "") or ""
 
-# Fuera los cuerpos de heredoc: escribir un fichero que MENCIONA el comando no
-# es ejecutarlo.
-cmd = re.sub(r"<<-?\s*[\x27\"]?(\w+)[\x27\"]?.*?^\s*\1\s*$", " ", cmd, flags=re.S | re.M)
+# Shells que EJECUTAN lo que les llega por la entrada estándar. Importa para
+# los heredoc: `cat > f <<FIN` escribe un fichero, pero `bash <<FIN` ejecuta.
+SHELLS = {"bash", "sh", "zsh", "dash", "ksh", "csh", "tcsh", "fish"}
 
 # Opciones globales que se comen el siguiente argumento.
 GIT_CON_VALOR = {"-C", "-c", "--exec-path", "--git-dir", "--work-tree", "--namespace"}
@@ -186,12 +186,16 @@ def clasificar(trozo):
         # única capa que protege este clon fuera de esta rama.
         if "--no-verify" in piezas:
             return ("push-no-verify", "git push --no-verify")
-        # Un ensayo no toca el remoto. La exención vive AQUÍ y en ningún otro
-        # sitio: mirarla sobre el comando entero era un agujero —bastaba colar
-        # un --dry-run en cualquier parte— y en `gh` no vale, porque la ayuda
-        # de `gh pr create` dice que el suyo "may still push git changes".
+        # El ensayo no toca el remoto, pero TAMPOCO llega a completarse con la
+        # guarda puesta: comprobado que git ejecuta `pre-push` también en
+        # `--dry-run`. Si además hubiera un vale emitido, esa puerta se lo
+        # comería sin publicar nada. Así que se frena aquí, que es donde se
+        # puede explicar, en vez de dejarlo fallar más abajo.
+        #
+        # En `gh` no hay exención de ninguna clase: la ayuda de `gh pr create`
+        # dice que su `--dry-run` "may still push git changes".
         if "--dry-run" in piezas:
-            return None
+            return ("push-dry-run", "git push --dry-run")
         return ("push", "git push")
 
     # ---- gh ----
@@ -220,15 +224,66 @@ def clasificar(trozo):
     return None
 
 
+# ---------------------------------------------------------------------------
+# Heredoc: depende de QUIÉN lo recibe
+#
+# `cat > f <<FIN … FIN` escribe un fichero que MENCIONA el comando, y eso no es
+# ejecutarlo. Pero `bash <<FIN … FIN` lo EJECUTA, y ahí el cuerpo es tan real
+# como cualquier otro fragmento. Borrarlos todos por igual dejaba pasar una
+# publicación entera.
+#
+# Así que se mira el comando que abre cada heredoc: si es una shell, el cuerpo
+# se guarda para clasificarlo; si no, se descarta como hasta ahora.
+# ---------------------------------------------------------------------------
+cuerpos = []
+
+
+def _heredoc(m):
+    inicio = m.string.rfind("\n", 0, m.start()) + 1
+    cabecera = m.string[inicio:m.start()]
+    piezas = desenvolver(cabecera.split())
+    ejecutable = piezas[0].rsplit("/", 1)[-1] if piezas else ""
+    if ejecutable in SHELLS:
+        cuerpos.append(m.group(0))
+    return " "
+
+
+cmd = re.sub(r"<<-?\s*[\x27\"]?(\w+)[\x27\"]?.*?^\s*\1\s*$", _heredoc, cmd,
+             flags=re.S | re.M)
+
+
+def anidados(texto, vueltas=6):
+    """Lo que va dentro de paréntesis o comillas invertidas.
+
+    La shell ejecuta `$(…)`, `` `…` ``, `<(…)` y hasta un `(…)` suelto ANTES
+    que el comando que los envuelve, así que `echo "$(gh pr merge 1)"` publica
+    igual. Mirando solo el primer token no se veía: era `$(gh`.
+    """
+    fuera, pendiente = [], [texto]
+    for _ in range(vueltas):
+        nuevos = []
+        for t in pendiente:
+            nuevos += re.findall(r"\(([^()]*)\)", t)
+            nuevos += re.findall(r"`([^`]*)`", t)
+        nuevos = [n for n in nuevos if n.strip()]
+        if not nuevos:
+            break
+        fuera += nuevos
+        pendiente = nuevos
+    return fuera
+
+
 # Se examina el comando entero Y el contenido de cada cadena entrecomillada:
 # ahí se esconde un `bash -c "git push"`, que si no pasa porque su primer token
 # es `bash`. El precio es que un `echo` del comando también se bloquea.
 #
 # NO se deduplica: contar de más bloquea de más, y contar de menos publica de
 # más. Dos `gh pr comment` idénticos son dos escrituras.
-candidatos = [cmd]
+candidatos = [cmd] + cuerpos
 candidatos += re.findall(r"\x27([^\x27]*)\x27", cmd)
 candidatos += re.findall(r"\"([^\"]*)\"", cmd)
+for base in list(candidatos):
+    candidatos += anidados(base)
 
 for texto in candidatos:
     for trozo in re.split(r"[;&|\n]+", texto):
@@ -254,6 +309,25 @@ otros hooks de pre-push que justifiquen saltársela.
 
 Quita la opción y vuelve a intentarlo. El vale no cambia nada: esto no es
 falta de permiso, es una vía que no se usa.
+FIN
+  exit 2
+fi
+
+# ---- El ensayo no llega a completarse con la guarda puesta ----
+# Se mira antes que el recuento sólo si es lo único que hay: si además viene un
+# `gh` de escritura detrás, lo que importa es el otro mensaje.
+if [ "$cuantas" -eq 1 ] && printf '%s\n' "$operaciones" | grep -q '^push-dry-run|'; then
+  cat >&2 <<'FIN'
+BLOQUEADO — `git push --dry-run` no llega a completarse con la guarda puesta.
+
+Git ejecuta `pre-push` también en los ensayos —comprobado—, así que la puerta
+de git lo frenaría igual unos pasos más abajo. Y si hubiera un vale emitido, se
+lo comería sin publicar nada.
+
+Para ver qué saldría, sin tocar el remoto ni gastar el vale:
+
+    git log  --oneline @{upstream}..HEAD
+    git diff --stat    @{upstream}..HEAD
 FIN
   exit 2
 fi

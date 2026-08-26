@@ -89,8 +89,7 @@ límite y no una convención.
 ## Cómo decide
 
 Se trocea el comando por `; & | salto de línea` y se mira **qué subcomando es
-cada fragmento**, no qué palabras contiene el conjunto. Los cuerpos de heredoc se
-ignoran: documentar un comando no es ejecutarlo.
+cada fragmento**, no qué palabras contiene el conjunto.
 
 **`git`** — se exige que `push` sea el subcomando, no una palabra suelta. La
 primera versión usaba una expresión laxa y se comió **dos falsos positivos en
@@ -117,14 +116,18 @@ comando; con dos o más **bloquea siempre, y el vale no sirve**. Esta capa se
 ejecuta una sola vez por comando: si `gh pr merge 1 && gh pr edit 2` pasara, se
 ejecutarían las dos con un solo permiso.
 
-**`--dry-run` exime sólo a `git push`, y sólo a su propio fragmento.** Dos
-razones, las dos comprobadas:
+**`--dry-run` no exime a nada, y conviene saber por qué.** Empezó eximiendo al
+comando entero, que era un agujero —bastaba colarlo en cualquier parte para que
+`git push --dry-run x && gh pr merge 1` pasara—. Luego eximía sólo a su propio
+fragmento y sólo en `git`. Ahora no exime nada, por dos motivos comprobados:
 
-- Mirarlo sobre el comando entero era un agujero: bastaba colar un `--dry-run`
-  en cualquier parte para que `git push --dry-run x && gh pr merge 1` pasara
-  entera.
-- En `gh` no exime nada. La ayuda de `gh pr create` dice literalmente que su
-  `--dry-run` *«may still push git changes»*.
+- **Git ejecuta `pre-push` también en los ensayos.** Reproducido con un remoto
+  local temporal: el hook corre. Así que un `git push --dry-run` no llegaba a
+  completarse igualmente, y con un vale emitido la puerta de git **se lo comía
+  sin publicar nada**. Se frena en la primera capa, que es donde se puede
+  explicar y ofrecer la alternativa (`git log`/`git diff` contra el upstream).
+- **En `gh` nunca fue seguro.** La ayuda de `gh pr create` dice literalmente que
+  su `--dry-run` *«may still push git changes»*.
 
 **Prefijos y envoltorios.** Se pelan las asignaciones `VAR=valor` y los
 envoltorios que pasan argv tal cual —`env`, `command`, `builtin`, `exec`,
@@ -150,6 +153,19 @@ clon fuera de esta rama.
 **Se mira dentro de las comillas**, aparte del comando entero: si no, un
 `bash -c "…"` se cuela porque su primer token es `bash`.
 
+**Y dentro de todo lo demás que la shell ejecuta por su cuenta:**
+
+- **Sustituciones y subshells.** `$(…)`, `` `…` ``, `<(…)` y hasta un `(…)`
+  suelto se ejecutan **antes** que el comando que los envuelve, así que
+  `echo "$(gh pr merge 1)"` publica igual. Mirando sólo el primer token no se
+  veía: era `$(gh`. Se extrae el interior, y en varias vueltas para los
+  anidados. Un `$(git rev-parse HEAD)` sigue pasando, claro.
+- **Heredoc, según quién lo reciba.** `cat > f <<FIN … FIN` escribe un fichero
+  que MENCIONA el comando, y eso no es ejecutarlo — era uno de los dos falsos
+  positivos originales—. Pero `bash <<FIN … FIN` lo **ejecuta**. Se mira el
+  comando que abre el heredoc: si es una shell, el cuerpo se clasifica como
+  cualquier otro fragmento; si no, se descarta.
+
 ### La puerta de git, en detalle
 
 Git le pasa al hook las refs por la entrada estándar, una línea por ref
@@ -172,6 +188,9 @@ Están escritos porque conviene saberlos, no porque den igual:
 - **`git push --no-verify` desde una terminal a mano no tiene ninguna puerta.**
   La de git no se ejecuta —para eso está la opción— y la de Claude no está. Es
   límite de los hooks de git, no de esta guarda.
+- **`git push --dry-run` queda frenado.** No es un descuido: git ejecuta
+  `pre-push` también en los ensayos, así que no podía completarse de todos
+  modos. Para ver qué saldría, `git log` y `git diff` contra el upstream.
 - **El vale está atado al SHA, no al comando.** Un vale válido podría autorizar
   una operación distinta con el mismo `HEAD`. Que el informe enseñe el comando
   exacto reduce el riesgo de autorizar a ciegas, pero no lo elimina.
@@ -189,12 +208,13 @@ Están escritos porque conviene saberlos, no porque den igual:
 bash .claude/hooks/prueba.sh
 ```
 
-**75 casos** en tres bloques:
+**86 casos** en tres bloques:
 
 - **Detección** — incluidos los dos falsos positivos reales, los rodeos
   evidentes (`bash -c`, ruta absoluta, `--repo` delante del verbo, prefijos y
-  envoltorios), las formas de `gh api`, y un verbo inventado para comprobar que
-  lo desconocido cae del lado seguro. Cada caso puede exigir además **por qué**
+  envoltorios), las sustituciones de comando y subshells, los heredoc que
+  ejecutan frente a los que solo escriben, las formas de `gh api`, y un verbo
+  inventado para comprobar que lo desconocido cae del lado seguro. Cada caso puede exigir además **por qué**
   bloquea, no solo que bloquee.
 - **Ciclo del vale en la capa de Claude** — comprueba si el vale sigue o se
   consume, que es donde estaba el defecto de las dos autorizaciones.

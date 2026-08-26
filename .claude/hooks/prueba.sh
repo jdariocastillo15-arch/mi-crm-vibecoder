@@ -102,8 +102,7 @@ probar_prepush() {
 
 echo "── git · debe DEJAR PASAR ──"
 probar pasa    "rama con la palabra en el nombre"    'git checkout -b jdariocastillo15/guarda-de-push'
-probar pasa    "heredoc que menciona el comando"     "$(printf 'cat > f <<%sFIN%s\nse hace git push -u origin x\nFIN\n' "'" "'")"
-probar pasa    "ensayo, no escribe en el remoto"     'git push --dry-run origin main'
+probar pasa    "heredoc que MENCIONA el comando"     "$(printf 'cat > f <<%sFIN%s\nse hace git push -u origin x\nFIN\n' "'" "'")"
 probar pasa    "lectura normal"                      'git log --oneline -5'
 probar pasa    "commit"                              'git commit -m "arregla el push del formulario"'
 
@@ -138,15 +137,36 @@ probar BLOQUEA "api con método de escritura"         'gh api -X POST repos/owne
 probar BLOQUEA "api con campos"                      'gh api repos/owner/repo -f name=z'
 probar BLOQUEA "verbo desconocido, lado seguro"      'gh pr inventado-manana'
 
-echo "── defectos 1 y 4 · el ensayo exime sólo a su fragmento, y sólo en git ──"
-probar BLOQUEA "ensayo de git + merge de gh: el gh se ve igual" \
-       'git push --dry-run origin main && gh pr merge 1 --merge' 'gh pr merge 1 --merge'
+echo "── defectos 1, 4 y 12 · el ensayo ──"
+probar BLOQUEA "el ensayo tampoco llega de punta a punta" \
+       'git push --dry-run origin main' 'no llega a completarse'
+probar BLOQUEA "ensayo de git + merge de gh: son dos" \
+       'git push --dry-run origin main && gh pr merge 1 --merge' '2 operaciones'
 probar BLOQUEA "el mismo par, al revés" \
-       'gh pr merge 1 && git push --dry-run' 'gh pr merge 1'
+       'gh pr merge 1 && git push --dry-run' '2 operaciones'
 probar BLOQUEA "gh pr create --dry-run: puede empujar igual" 'gh pr create --dry-run --title x'
 probar BLOQUEA "gh pr merge --dry-run"                       'gh pr merge 1 --dry-run'
-probar BLOQUEA "el ensayo no exime a un push de verdad detrás" \
-       'git push --dry-run && git push' 'COMMITS PENDIENTES'
+probar BLOQUEA "ensayo + push de verdad detrás" \
+       'git push --dry-run && git push' '2 operaciones'
+
+echo "── defecto 13 · heredoc que SE EJECUTA ──"
+probar BLOQUEA "bash <<EOF con un merge dentro" \
+       "$(printf 'bash <<%sEOF%s\ngh pr merge 1 --merge\nEOF\n' "'" "'")" 'gh pr merge'
+probar BLOQUEA "sh <<EOF con un push dentro" \
+       "$(printf 'sh <<%sEOF%s\ngit push -u origin x\nEOF\n' "'" "'")"
+probar BLOQUEA "zsh, sin comillas en la etiqueta" \
+       "$(printf 'zsh <<EOF\ngh release create v1\nEOF\n' )"
+probar pasa    "tee de un fichero: sigue siendo texto" \
+       "$(printf 'tee f <<%sFIN%s\ngit push -u origin x\nFIN\n' "'" "'")"
+
+echo "── defecto 14 · sustitución de comando y subshells ──"
+probar BLOQUEA 'sustitución con $( )'          'echo "$(gh pr merge 1 --merge)"'  'gh pr merge'
+probar BLOQUEA "comillas invertidas"           'echo `gh pr merge 1`'
+probar BLOQUEA "subshell suelto"               '(gh pr merge 1)'
+probar BLOQUEA "sustitución anidada"           'echo "$(echo $(git push))"'
+probar BLOQUEA "sustitución de proceso"        'diff <(gh pr merge 1) f'
+probar pasa    "sustitución inocente: rev-parse" 'printf "%s" "$(git rev-parse HEAD)" > /tmp/x'
+probar pasa    "paréntesis en un mensaje"      'git commit -m "arregla (el push) del formulario"'
 
 echo "── defectos 2 y 5 · un vale, una publicación ──"
 probar BLOQUEA "dos escrituras distintas"      'gh pr merge 1 && gh pr edit 2'         '2 operaciones'
