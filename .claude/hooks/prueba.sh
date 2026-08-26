@@ -159,6 +159,31 @@ probar BLOQUEA "zsh, sin comillas en la etiqueta" \
 probar pasa    "tee de un fichero: sigue siendo texto" \
        "$(printf 'tee f <<%sFIN%s\ngit push -u origin x\nFIN\n' "'" "'")"
 
+echo "── defecto 15 · el comando fuera de la posición 0 ──"
+probar BLOQUEA "agrupación con llaves"         '{ gh pr merge 1 --merge; }'      'gh pr merge'
+probar BLOQUEA "dentro de un if"               'if true; then gh pr merge 1 --merge; fi'
+probar BLOQUEA "dentro de un for"              'for p in 1; do gh pr merge $p --merge; done'
+probar BLOQUEA "dentro de un while"            'while true; do git push; done'
+probar BLOQUEA "dentro de un case"             'case x in a) gh pr merge 1;; esac'
+probar BLOQUEA "negado con !"                  '! gh pr merge 1'
+probar BLOQUEA "eval"                          'eval gh pr merge 1'
+probar BLOQUEA "envoltorio que nadie previó"   'envoltorio-inventado git push'
+probar BLOQUEA "sudo -u foo: el límite que se cierra" 'sudo -u foo git push'
+
+echo "── defecto 16 · quién recibe el heredoc ──"
+probar BLOQUEA "cd && bash <<EOF" \
+       "$(printf 'cd /tmp && bash <<%sEOF%s\ngh pr merge 1 --merge\nEOF\n' "'" "'")" 'gh pr merge'
+probar BLOQUEA "then bash <<EOF" \
+       "$(printf 'if true; then bash <<%sEOF%s\ngit push -u origin x\nEOF\nfi\n' "'" "'")"
+probar BLOQUEA "bash -s <<EOF" \
+       "$(printf 'bash -s <<%sEOF%s\ngh pr merge 1 --merge\nEOF\n' "'" "'")"
+probar pasa    "cd && cat <<FIN sigue siendo texto" \
+       "$(printf 'cd /tmp && cat > f <<%sFIN%s\ngit push -u origin x\nFIN\n' "'" "'")"
+
+echo "── el precio del barrido, comprobado a propósito ──"
+probar pasa    "mensaje que menciona «el push»"  'git commit -m "arregla el push del formulario"'
+probar BLOQUEA "mensaje que menciona el verbo"   'git commit -m "arregla el gh pr merge"'
+
 echo "── defecto 14 · sustitución de comando y subshells ──"
 probar BLOQUEA 'sustitución con $( )'          'echo "$(gh pr merge 1 --merge)"'  'gh pr merge'
 probar BLOQUEA "comillas invertidas"           'echo `gh pr merge 1`'

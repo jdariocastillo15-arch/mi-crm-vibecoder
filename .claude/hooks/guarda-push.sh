@@ -91,12 +91,28 @@ ENVOLTORIOS = {
 REALES = ("git", "gh", "git-push")
 
 
+# Palabras de control de la shell. No son comandos: `then bash <<EOF` lo recibe
+# `bash`, no `then`.
+CONTROL = {"{", "}", "!", "then", "else", "elif", "do", "done", "fi", "esac",
+           "if", "while", "until", "for", "case", "in", "select", "function",
+           "coproc", "eval"}
+
+
 def desenvolver(piezas):
-    """Quita asignaciones y envoltorios hasta dar con el ejecutable real."""
+    """Quita asignaciones, palabras de control y envoltorios.
+
+    Ya NO se usa para detectar —de eso se encarga `operaciones_en`, barriendo
+    todas las posiciones—. Sigue haciendo falta aquí para una pregunta muy
+    concreta: quién recibe un heredoc, que sí es un comando concreto y no
+    "cualquier aparición".
+    """
     i, hubo_envoltorio = 0, False
     while i < len(piezas):
         p = piezas[i]
         if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", p):        # VAR=valor
+            i += 1
+            continue
+        if p in CONTROL:
             i += 1
             continue
         nombre = p.rsplit("/", 1)[-1]
@@ -166,9 +182,12 @@ def api_escribe(piezas):
     return None
 
 
-def clasificar(trozo):
-    """(clase, motivo) del fragmento, o None si no publica."""
-    piezas = desenvolver(trozo.split())
+def clasificar(piezas):
+    """(clase, motivo) de una lista de tokens que EMPIEZA en git/gh.
+
+    Recibe tokens ya troceados, no texto: quien barre el fragmento decide
+    dónde empieza cada aparición y pasa la rebanada.
+    """
     if not piezas:
         return None
     ejecutable = piezas[0].rsplit("/", 1)[-1]
@@ -241,7 +260,12 @@ cuerpos = []
 def _heredoc(m):
     inicio = m.string.rfind("\n", 0, m.start()) + 1
     cabecera = m.string[inicio:m.start()]
-    piezas = desenvolver(cabecera.split())
+    # Quien recibe el cuerpo es el ÚLTIMO comando de la línea, no el primero:
+    # en `cd /tmp && bash <<EOF` el cuerpo se lo come `bash`. Mirando la línea
+    # entera se identificaba `cd`, y el cuerpo se descartaba con un merge dentro.
+    # Mismo troceador que abajo, para que las dos partes no discrepen.
+    ultimo = re.split(r"[;&|]+", cabecera)[-1]
+    piezas = desenvolver(ultimo.split())
     ejecutable = piezas[0].rsplit("/", 1)[-1] if piezas else ""
     if ejecutable in SHELLS:
         cuerpos.append(m.group(0))
@@ -285,11 +309,32 @@ candidatos += re.findall(r"\"([^\"]*)\"", cmd)
 for base in list(candidatos):
     candidatos += anidados(base)
 
+def operaciones_en(trozo):
+    """Todas las publicaciones del fragmento.
+
+    Se busca CADA aparición de git/gh como palabra, no sólo la primera del
+    fragmento. Así da igual lo que venga delante —llaves, `then`, `do`, `!`,
+    `eval`, una asignación, un envoltorio que nadie previó—: si ahí dentro hay
+    un `gh pr merge`, se ve.
+
+    Mirar sólo el primer token costó tres rondas de agujeros seguidas: primero
+    los envoltorios, luego las sustituciones, después las palabras de control.
+    Barrer cierra la clase entera en vez de ir tapándola caso a caso.
+    """
+    piezas = trozo.split()
+    fuera = []
+    for i, p in enumerate(piezas):
+        if p.rsplit("/", 1)[-1] in REALES:
+            c = clasificar(piezas[i:])
+            if c:
+                fuera.append(c)
+    return fuera
+
+
 for texto in candidatos:
     for trozo in re.split(r"[;&|\n]+", texto):
         trozo = trozo.strip()
-        c = clasificar(trozo)
-        if c:
+        for c in operaciones_en(trozo):
             limpio = re.sub(r"[|\n\r]+", " ", trozo).strip()[:200]
             print(c[0] + "|" + c[1] + "|" + limpio)
 ' 2>/dev/null)

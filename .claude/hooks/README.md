@@ -129,17 +129,17 @@ fragmento y sólo en `git`. Ahora no exime nada, por dos motivos comprobados:
 - **En `gh` nunca fue seguro.** La ayuda de `gh pr create` dice literalmente que
   su `--dry-run` *«may still push git changes»*.
 
-**Prefijos y envoltorios.** Se pelan las asignaciones `VAR=valor` y los
-envoltorios que pasan argv tal cual —`env`, `command`, `builtin`, `exec`,
-`nohup`, `time`, `sudo`, `nice`, `stdbuf`, `setsid`, `xargs`— con la tabla de
-opciones que se comen un argumento de cada uno. Sin esto,
-`GH_REPO=o/r gh pr merge 1` no se veía. Hay además una red de seguridad: si tras
-pelar un envoltorio no se aterriza en `git`/`gh`, se busca el primero que quede
-—así caen `nice -n 10 git push` y `xargs -I {} gh pr merge {}` aunque la tabla
-de opciones se quede corta—.
+**No importa qué haya delante del comando.** En cada fragmento se busca **toda
+aparición** de `git` o `gh` como palabra, no solo la primera posición, y se
+clasifica desde ahí. Así da igual lo que venga antes: llaves, `then`, `do`,
+`case`, `!`, `eval`, una asignación de entorno, `sudo`, `xargs`, o un envoltorio
+que nadie previó.
 
-`bash`, `sh` y `zsh` **no** están en esa lista a propósito: no pasan argv tal
-cual, y lo suyo lo cubre el escaneo de comillas.
+Depender de que el comando fuera el primer token costó **tres rondas de
+agujeros seguidas** —primero los envoltorios, luego las sustituciones, después
+las palabras de control—, cada una tapada caso a caso mientras la clase seguía
+abierta. Barrer la cierra entera: es un superconjunto estricto de lo que se
+detectaba antes, así que no puede perder nada que ya se viera.
 
 **`--help` pasa**, y se mira **antes** de descartar opciones —era justo ahí donde
 se lo comía, y `gh pr merge --help` acababa bloqueado—. **Sólo `--help`, nunca
@@ -165,6 +165,12 @@ clon fuera de esta rama.
   positivos originales—. Pero `bash <<FIN … FIN` lo **ejecuta**. Se mira el
   comando que abre el heredoc: si es una shell, el cuerpo se clasifica como
   cualquier otro fragmento; si no, se descarta.
+
+  El receptor es el **último comando de la línea**, no el primero. Mirando la
+  línea entera, un `cd /tmp && bash <<EOF` identificaba `cd`, decidía que el
+  cuerpo era texto y se tragaba el merge que llevaba dentro. Es la única parte
+  que sigue preguntando «¿qué comando es este?» en vez de barrer, porque aquí la
+  pregunta es precisamente quién recibe el cuerpo.
 
 ### La puerta de git, en detalle
 
@@ -194,11 +200,22 @@ Están escritos porque conviene saberlos, no porque den igual:
 - **El vale está atado al SHA, no al comando.** Un vale válido podría autorizar
   una operación distinta con el mismo `HEAD`. Que el informe enseñe el comando
   exacto reduce el riesgo de autorizar a ciegas, pero no lo elimina.
-- **Contar sin deduplicar bloquea de más.** Un `echo` de un comando de push
-  cuenta como operación, así que `echo "git push" && git push` queda bloqueado
-  sin remedio. Es deliberado: contar de menos publicaría de más.
-- **Un envoltorio muy exótico puede escaparse** si su opción lleva un valor que
-  no está en la tabla y además no queda ningún `git`/`gh` reconocible detrás.
+- **Nombrar un comando de publicación, en cualquier parte, bloquea.** No solo
+  al principio de un fragmento: con el barrido, `git commit -m "arregla el gh pr
+  merge"` queda bloqueado. Y contar sin deduplicar bloquea de más, así que
+  `echo "git push" && git push` cuenta dos. Las dos cosas son deliberadas:
+  contar de menos publicaría de más. Comprobado que ninguno de los comandos de
+  `git`/`gh` que se usan a diario —`status`, `log`, `diff`, `show`, `grep`,
+  `add`, `commit`, `fetch`, `worktree`, `ls-remote`, y las lecturas de `gh`—
+  se ve afectado.
+- **El ejecutable construido sin token literal se escapa.** El barrido busca la
+  palabra `git` o `gh`; si no aparece, no hay nada que ver. Comprobado que pasan
+  `G=gh; $G pr merge 1`, `$(printf gh) pr merge 1` y `g""h pr merge 1`, y que
+  una función o un alias definidos antes tampoco se ven al usarlos —de un
+  `alias p="gh pr merge"; p 1` se ve la definición entrecomillada, no la
+  llamada—. Cerrar esto exigiría bloquear toda esa sintaxis, no reconocerla.
+  Entra de lleno en el «asistente que decide saltárselo» de más arriba, pero
+  conviene tenerlo nombrado y no darlo por cubierto.
 - **La matriz crea vales reales** mientras corre, unos milisegundos, con un
   `trap` que los borra. No la ejecutes en mitad de un push.
 
@@ -208,13 +225,15 @@ Están escritos porque conviene saberlos, no porque den igual:
 bash .claude/hooks/prueba.sh
 ```
 
-**86 casos** en tres bloques:
+**101 casos** en tres bloques:
 
 - **Detección** — incluidos los dos falsos positivos reales, los rodeos
   evidentes (`bash -c`, ruta absoluta, `--repo` delante del verbo, prefijos y
-  envoltorios), las sustituciones de comando y subshells, los heredoc que
-  ejecutan frente a los que solo escriben, las formas de `gh api`, y un verbo
-  inventado para comprobar que lo desconocido cae del lado seguro. Cada caso puede exigir además **por qué**
+  envoltorios, palabras de control, `eval`, agrupaciones), las sustituciones de
+  comando y subshells, los heredoc que ejecutan frente a los que solo escriben,
+  las formas de `gh api`, y un verbo inventado para comprobar que lo desconocido
+  cae del lado seguro. Incluye también los falsos positivos que se aceptan a
+  propósito, para que consten como decisión y no como descuido. Cada caso puede exigir además **por qué**
   bloquea, no solo que bloquee.
 - **Ciclo del vale en la capa de Claude** — comprueba si el vale sigue o se
   consume, que es donde estaba el defecto de las dos autorizaciones.
