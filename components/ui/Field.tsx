@@ -132,7 +132,7 @@ export function Input({
           )}
         />
         {accionInterior && (
-          <span className="absolute top-1/2 right-1.5 -translate-y-1/2">
+          <span className="absolute top-1/2 right-1 -translate-y-1/2">
             {accionInterior}
           </span>
         )}

@@ -174,7 +174,11 @@ export function Chips<T extends string>({
                 onChange(activa && permitirVaciar ? null : opcion.valor)
               }
               className={cn(
-                "transition-colors",
+                // Los 44px de objetivo táctil que pide JES-73 los pone este
+                // `min-h-11`, y va en la clase base y no en cada rama para que
+                // ninguna se quede fuera: la normal se quedaba en 42px y la de
+                // etiqueta, que envuelve un Badge, en 39,5.
+                "inline-flex min-h-11 items-center justify-center transition-colors",
                 // Sin esto, en una fila que se desplaza flexbox encoge los
                 // botones para que quepan todos y el desplazamiento nunca
                 // llega a hacer falta: el texto se parte y la fila crece a lo
@@ -195,9 +199,10 @@ export function Chips<T extends string>({
                         : "border-transparent",
                     )
                   : cn(
-                      // El relleno es el que ya tenía, no los 8px del diseño:
-                      // con 8px el chip se queda en unos 37px de alto, por
-                      // debajo del objetivo táctil de 44px que fija JES-73.
+                      // El relleno no son los 8px del diseño, que dejarían
+                      // el chip en unos 37px de alto. Pero tampoco bastaba el
+                      // que había: con `py-2.5` se queda en 42, y los 44 que
+                      // pide JES-73 los pone el `min-h-11` de la clase base.
                       "rounded-md border px-3.5 py-2.5 text-sm font-medium",
                       !activa
                         ? "border-border-strong bg-surface text-text-muted hover:bg-surface-2"

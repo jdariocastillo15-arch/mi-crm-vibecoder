@@ -176,15 +176,36 @@ export function Overlay({
           )}
         >
           {/* Tirador: en móvil es el asa del gesto; en escritorio no pinta nada. */}
-          <div
-            onPointerDown={alBajarPuntero}
-            onPointerMove={alMoverPuntero}
-            onPointerUp={alSoltarPuntero}
-            onPointerCancel={alSoltarPuntero}
-            className="flex shrink-0 justify-center pt-2.5 pb-1 md:hidden"
-            style={{ touchAction: "none" }}
-          >
+          <div className="relative flex shrink-0 justify-center pt-2.5 pb-1 md:hidden">
             <span aria-hidden className="h-1 w-9 rounded-full bg-border-strong" />
+
+            {/* El asa que se ve mide 18px de alto; el objetivo táctil que pide
+                JES-73 son 44. La diferencia se gana con esta capa transparente,
+                que baja POR ENCIMA del encabezado en vez de empujarlo: agrandar
+                el <div> costaría 18px de alto en los seis overlays, y solo en
+                móvil, que es donde el asa existe.
+
+                Funciona porque el <div> es `relative` y el <header> no, así que
+                lo posicionado pinta —y recibe punteros— por encima.
+
+                `right-20` reserva 80px a la derecha. El botón "Cerrar" ocupa 60:
+                sus 44px más los 16 del `px-4` del encabezado. Los otros 20 son
+                holgura a propósito, para que un pulgar que apunte a su borde
+                izquierdo no acabe arrastrando el overlay. Debajo de la capa
+                solo queda el <h2>, que no es interactivo.
+
+                El `z-10` no hace falta hoy —basta con que el <div> sea
+                `relative`— pero deja el orden escrito en vez de deducido, para
+                que posicionar el <header> algún día no apague el asa en
+                silencio. */}
+            <span
+              onPointerDown={alBajarPuntero}
+              onPointerMove={alMoverPuntero}
+              onPointerUp={alSoltarPuntero}
+              onPointerCancel={alSoltarPuntero}
+              className="absolute top-0 right-20 left-0 z-10 h-11"
+              style={{ touchAction: "none" }}
+            />
           </div>
 
           <header className="flex shrink-0 items-center gap-2 px-4 pt-2 pb-3 md:pt-4">

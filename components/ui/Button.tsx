@@ -19,7 +19,7 @@ const VARIANTES: Record<Variante, string> = {
   ghost:
     "bg-transparent text-text-muted border border-transparent font-medium hover:bg-surface-2",
   destructive:
-    "bg-error text-white border border-transparent font-semibold hover:brightness-90",
+    "bg-error text-on-primary border border-transparent font-semibold hover:brightness-90",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

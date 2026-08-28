@@ -132,7 +132,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   aviso.accion?.onClick();
                   cerrar();
                 }}
-                className="shrink-0 rounded-md px-2 py-1 text-[15px] font-semibold underline underline-offset-2"
+                className="inline-flex min-h-11 shrink-0 items-center rounded-md px-2 text-[15px] font-semibold underline underline-offset-2"
               >
                 {aviso.accion.label}
               </button>
