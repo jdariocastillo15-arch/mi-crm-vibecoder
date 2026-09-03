@@ -163,21 +163,28 @@ export async function asignarEmail(
     throw new Error(`Ya hay otra persona en el equipo con ${email}`);
   }
 
-  if (usuario.email === email) {
-    return { email, cambiado: false, contrasenaMovida: false };
+  const cambiado = usuario.email !== email;
+  if (cambiado) {
+    await ctx.db.patch(usuarioId, { email });
   }
 
-  await ctx.db.patch(usuarioId, { email });
-
+  // La credencial se mira SIEMPRE, aunque `users.email` ya estuviera bien.
+  // Puede haberse quedado atrás por su cuenta: un alta antigua guardó el correo
+  // tal y como se tecleó, o alguien tocó una de las dos tablas sin la otra.
+  // Así esta función también sirve para sanear —basta ejecutarla con el correo
+  // que la persona ya tiene— y es idempotente: repetirla no cambia nada.
   const cuentaPassword = await ctx.db
     .query("authAccounts")
     .withIndex("userIdAndProvider", (q) =>
       q.eq("userId", usuarioId).eq("provider", "password"),
     )
     .unique();
-  if (cuentaPassword !== null) {
+
+  const contrasenaMovida =
+    cuentaPassword !== null && cuentaPassword.providerAccountId !== email;
+  if (cuentaPassword !== null && contrasenaMovida) {
     await ctx.db.patch(cuentaPassword._id, { providerAccountId: email });
   }
 
-  return { email, cambiado: true, contrasenaMovida: cuentaPassword !== null };
+  return { email, cambiado, contrasenaMovida };
 }

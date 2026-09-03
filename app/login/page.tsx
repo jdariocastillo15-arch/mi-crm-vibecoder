@@ -57,9 +57,12 @@ export default function LoginPage({
   /**
    * Entrar por Google no navega solo. El proveedor de Convex Auth canjea el
    * `code` que trae la URL, guarda la sesión y borra el parámetro, pero deja al
-   * usuario donde estaba: aquí, ya autenticado, mirando el formulario. Esta es
-   * la navegación que falta. Sirve también para quien vuelva a /login con la
-   * sesión abierta.
+   * usuario donde estaba: aquí, ya autenticado, mirando el formulario.
+   *
+   * Tras volver de Google, ESTA es la garantía primaria, no el middleware: el
+   * canje ocurre entero en el navegador, sin una nueva petición de documento,
+   * así que el middleware no llega a intervenir. Él cubre el otro caso —entrar
+   * a /login con la sesión ya abierta—, que sí pasa por el servidor.
    */
   useEffect(() => {
     if (isAuthenticated) router.replace("/hoy");

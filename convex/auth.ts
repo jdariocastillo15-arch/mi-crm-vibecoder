@@ -33,7 +33,14 @@ import { buscarUsuarioPorEmail, normalizaEmail } from "./helpers";
 const VibeCRMPassword = Password<DataModel>({
   profile(params) {
     return {
-      email: params.email as string,
+      // Normalizado AQUÍ, antes de que la librería lo toque: este email es el
+      // que `@convex-dev/auth` usa como `account.id` de la credencial, tanto al
+      // dar de alta como al iniciar sesión (`providers/Password.ts:136`, usado
+      // en `:147` y `:159`). Si saliera en crudo, un alta escrita
+      // "Marta@Acme.es" dejaría `users.email` en minúsculas y
+      // `authAccounts.providerAccountId` con mayúsculas: dos formas del mismo
+      // correo, y un login que ya no encuentra su propia cuenta.
+      email: normalizaEmail(String(params.email ?? "")),
       name: (params.name as string) ?? "",
       rol: (params.rol as "propietaria" | "comercial") ?? "comercial",
       // Viaja hasta el guard de abajo; no se guarda en la base.
