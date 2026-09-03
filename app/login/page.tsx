@@ -31,6 +31,10 @@ export default function LoginPage({
   const { signIn } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const router = useRouter();
+  // `use` es un hook: va aquí arriba, incondicional y fuera de cualquier
+  // callback. Meterlo dentro del inicializador de `useState` rompe el orden de
+  // los hooks en cuanto el componente vuelve a renderizarse.
+  const params = use(searchParams);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,7 +46,7 @@ export default function LoginPage({
   // servidor, así que se pinta en el primer render. A partir de ahí es un error
   // más de la pantalla: cualquier intento nuevo lo limpia.
   const [error, setError] = useState<string | null>(() =>
-    avisoDeVueltaDeGoogle(use(searchParams)),
+    avisoDeVueltaDeGoogle(params),
   );
 
   const errorEmail =
