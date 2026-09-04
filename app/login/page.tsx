@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { use, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useConvexAuth } from "convex/react";
 import { Eye, EyeOff, Mail } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -10,31 +11,79 @@ import { Logo } from "@/components/shell/AppShell";
 import { esEmailValido } from "@/lib/format";
 
 /**
- * Inicio de sesión — implementa JES-46.
+ * Inicio de sesión — implementa JES-46 y JES-83.
  * Diseño: DESING/design_handoff_crm_pwa/CRM Shell.dc.html, líneas 32–65.
  *
- * Los errores solo aparecen tras el primer intento de enviar, no mientras se
- * escribe: validar cada tecla es hostil con quien todavía está escribiendo.
+ * Dos puertas: Google y la contraseña de siempre. Los errores del formulario
+ * solo aparecen tras el primer intento de enviar, no mientras se escribe:
+ * validar cada tecla es hostil con quien todavía está escribiendo.
  *
- * Aquí NO se crean cuentas. Las crea la Dueña desde la pantalla de Equipo
- * (JES-69). El registro está cerrado en el servidor, en `convex/auth.ts`; esta
- * pantalla simplemente no ofrece lo que ya no se puede hacer.
+ * Aquí NO se crean cuentas, por ninguna de las dos puertas. Los perfiles los
+ * crea la Dueña (JES-69) y el registro está cerrado en el servidor, en
+ * `convex/auth.ts`: entrar con Google exige que ese correo ya sea un usuario
+ * del CRM. Esta pantalla simplemente no ofrece lo que ya no se puede hacer.
  */
-export default function LoginPage() {
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const { signIn } = useAuthActions();
+  const { isAuthenticated } = useConvexAuth();
   const router = useRouter();
+  // `use` es un hook: va aquí arriba, incondicional y fuera de cualquier
+  // callback. Meterlo dentro del inicializador de `useState` rompe el orden de
+  // los hooks en cuanto el componente vuelve a renderizarse.
+  const params = use(searchParams);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [verPassword, setVerPassword] = useState(false);
   const [intentado, setIntentado] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [cargandoGoogle, setCargandoGoogle] = useState(false);
+  // El aviso de un intento de Google fallido llega ya decidido desde el
+  // servidor, así que se pinta en el primer render. A partir de ahí es un error
+  // más de la pantalla: cualquier intento nuevo lo limpia.
+  const [error, setError] = useState<string | null>(() =>
+    avisoDeVueltaDeGoogle(params),
+  );
 
   const errorEmail =
     intentado && !esEmailValido(email) ? "Introduce un email válido" : null;
   const errorPassword =
     intentado && password.trim().length === 0 ? "Introduce tu contraseña" : null;
+
+  /**
+   * Entrar por Google no navega solo. El proveedor de Convex Auth canjea el
+   * `code` que trae la URL, guarda la sesión y borra el parámetro, pero deja al
+   * usuario donde estaba: aquí, ya autenticado, mirando el formulario.
+   *
+   * Tras volver de Google, ESTA es la garantía primaria, no el middleware: el
+   * canje ocurre entero en el navegador, sin una nueva petición de documento,
+   * así que el middleware no llega a intervenir. Él cubre el otro caso —entrar
+   * a /login con la sesión ya abierta—, que sí pasa por el servidor.
+   */
+  useEffect(() => {
+    if (isAuthenticated) router.replace("/hoy");
+  }, [isAuthenticated, router]);
+
+  async function entrarConGoogle() {
+    setError(null);
+    setCargandoGoogle(true);
+    try {
+      await signIn("google", { redirectTo: "/login?google=1" });
+      // Si todo va bien, el navegador ya se ha ido a Google y esto no sigue.
+    } catch {
+      // Aquí solo se llega si la llamada falla ANTES de salir hacia Google:
+      // en la práctica, un despliegue sin AUTH_GOOGLE_ID o AUTH_GOOGLE_SECRET.
+      setError(
+        "No se ha podido conectar con Google. Avisa a quien administre el CRM.",
+      );
+      setCargandoGoogle(false);
+    }
+  }
+
   async function onSubmit(evento: FormEvent) {
     evento.preventDefault();
     setIntentado(true);
@@ -79,6 +128,24 @@ export default function LoginPage() {
             </div>
           )}
 
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            loading={cargandoGoogle}
+            disabled={cargando}
+            onClick={entrarConGoogle}
+            iconLeft={<IconoGoogle />}
+          >
+            Continuar con Google
+          </Button>
+
+          <div className="flex items-center gap-3" aria-hidden>
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[13px] text-text-subtle">o</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
             <Input
               label="Email"
@@ -119,7 +186,13 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <Button type="submit" variant="primary" fullWidth loading={cargando}>
+            <Button
+              type="submit"
+              variant="primary"
+              fullWidth
+              loading={cargando}
+              disabled={cargandoGoogle}
+            >
               Entrar
             </Button>
           </form>
@@ -127,5 +200,58 @@ export default function LoginPage() {
 
       </div>
     </main>
+  );
+}
+
+/**
+ * ¿Google nos ha devuelto con las manos vacías?
+ *
+ * Cuando el servidor rechaza el acceso, la librería redirige de vuelta SIN
+ * `code` y sin ningún mensaje (`implementation/index.ts`, el catch del
+ * callback): el rechazo se vería como un botón que no hizo nada. El marcador
+ * `google=1` que va en el `redirectTo` permite distinguir los dos casos — con
+ * `code` es un login en curso, y el proveedor lo está canjeando; sin él, es un
+ * rechazo o una cancelación.
+ *
+ * Lo lee el servidor, de los `searchParams` de la propia página, y no el
+ * navegador con `useSearchParams`: así el aviso viaja en el HTML inicial, no
+ * hace falta envolver la pantalla en <Suspense>, y no depende de llegar a
+ * mirar la URL antes de que el proveedor borre el `code` de ella.
+ */
+function avisoDeVueltaDeGoogle(params: {
+  [key: string]: string | string[] | undefined;
+}): string | null {
+  if (params.google !== "1" || params.code !== undefined) return null;
+  return "No se ha podido entrar con Google. Puede que hayas cancelado, o que esa cuenta no esté dada de alta en el CRM.";
+}
+
+/**
+ * La "G" de Google, en SVG y con sus colores de marca.
+ *
+ * Va inline y no como icono de `lucide-react` a propósito: la biblioteca no
+ * trae logos de marca, y las normas de Google para este botón piden su logo
+ * tal cual, sin recolorear. Por eso es lo único de esta pantalla que no usa los
+ * tokens del design system.
+ */
+function IconoGoogle() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden focusable="false">
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.02-3.7H.96v2.34A9 9 0 0 0 9 18Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.98 10.72a5.4 5.4 0 0 1 0-3.44V4.94H.96a9 9 0 0 0 0 8.12l3.02-2.34Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.94l3.02 2.34C4.68 5.16 6.66 3.58 9 3.58Z"
+      />
+    </svg>
   );
 }
