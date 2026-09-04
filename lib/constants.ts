@@ -47,8 +47,16 @@ export const ESTADO_VENTA: Record<EstadoVenta, { label: string; tono: Tono }> = 
   perdida: { label: "Perdida", tono: "error" },
 };
 
+/**
+ * El rótulo bajo el nombre, en la barra lateral (`AppShell.tsx:91`). Solo caben
+ * 94 px —el aside son 240 y se los reparten el padding, el avatar, el botón de
+ * salir y las separaciones— y ese span no lleva `truncate`: lo que se pasa no
+ * se corta con puntos suspensivos, parte en dos líneas y descoloca el pie de la
+ * barra. Con Inter 12/16 son unos 15 caracteres; «Atiende y vende» ya gasta
+ * 89,3 px. Si alargas un rótulo, mídelo antes.
+ */
 export const ROL: Record<RolUsuario, string> = {
-  propietaria: "Dueña",
+  propietaria: "Lleva el equipo",
   comercial: "Atiende y vende",
 };
 
