@@ -18,7 +18,7 @@ export async function requireUser(ctx: QueryCtx | MutationCtx) {
 export async function requirePropietaria(ctx: QueryCtx | MutationCtx) {
   const user = await requireUser(ctx);
   if (user.rol !== "propietaria") {
-    throw new Error("Solo la Dueña puede hacer esto");
+    throw new Error("Solo quien lleva el equipo puede hacer esto");
   }
   return user;
 }

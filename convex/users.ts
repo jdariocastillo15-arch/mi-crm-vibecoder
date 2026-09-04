@@ -116,7 +116,7 @@ export const eliminarUsuario = mutation({
 
     // Protección 1: nadie puede borrarse a sí mismo.
     if (actual._id === usuarioId) {
-      throw new Error("No puedes eliminarte a ti misma");
+      throw new Error("No puedes eliminar tu propia cuenta");
     }
 
     // Protección 2: el equipo nunca puede quedarse sin Dueña.
@@ -233,6 +233,6 @@ async function assertQuedaAlgunaDuena(ctx: MutationCtx, excepto: Id<"users">) {
     (u) => u.rol === "propietaria" && u._id !== excepto,
   );
   if (duenas.length === 0) {
-    throw new Error("El equipo no puede quedarse sin ninguna Dueña");
+    throw new Error("El equipo no puede quedarse sin nadie que lo lleve");
   }
 }
