@@ -126,6 +126,12 @@ export const eliminarUsuario = mutation({
       await assertQuedaAlgunaDuena(ctx, usuarioId);
     }
 
+    // Primero lo que permite entrar como ella: cuentas, sesiones, tokens de
+    // refresco y códigos de verificación. Sin esto quedaban vivos —incluido el
+    // hash de su contraseña— y rompían el login de quien reutilizara ese
+    // correo. Ver `borrarCredenciales` (JES-90).
+    await borrarCredenciales(ctx, usuarioId);
+
     // El historial que registró esta persona NO se borra con ella: sus
     // interacciones, ventas y seguimientos siguen existiendo. Queda pendiente
     // decidir qué pasa con sus seguimientos pendientes — ver JES-70.
@@ -224,6 +230,97 @@ export const cambiarEmailUsuario = internalMutation({
       rol: usuario.rol ?? "comercial",
       contrasenaMovida: resultado.contrasenaMovida,
     };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Borrar de verdad a alguien — JES-90.
+//
+// Convex Auth reparte lo que permite entrar como una persona en cuatro tablas,
+// y borrar su fila de `users` no toca ninguna. Antes quedaban vivas: el hash de
+// su contraseña, su cuenta de Google, sus sesiones y sus tokens de refresco.
+//
+// Se notó en desarrollo, donde había una credencial de contraseña apuntando a
+// un usuario que ya no existía. No daba acceso —`requireUser` comprueba que el
+// usuario esté, y falla— pero sí rompía el login de forma difícil de entender
+// si alguien reutilizaba ese correo: la búsqueda encontraba la credencial
+// vieja y devolvía un usuario nulo.
+// ---------------------------------------------------------------------------
+
+/** Una cuenta y los códigos de verificación que colgaban de ella. */
+async function borrarCuenta(ctx: MutationCtx, cuentaId: Id<"authAccounts">) {
+  const codigos = await ctx.db
+    .query("authVerificationCodes")
+    .withIndex("accountId", (q) => q.eq("accountId", cuentaId))
+    .collect();
+  for (const codigo of codigos) await ctx.db.delete(codigo._id);
+  await ctx.db.delete(cuentaId);
+}
+
+/** Una sesión y los tokens de refresco que colgaban de ella. */
+async function borrarSesion(ctx: MutationCtx, sesionId: Id<"authSessions">) {
+  const tokens = await ctx.db
+    .query("authRefreshTokens")
+    .withIndex("sessionId", (q) => q.eq("sessionId", sesionId))
+    .collect();
+  for (const token of tokens) await ctx.db.delete(token._id);
+  await ctx.db.delete(sesionId);
+}
+
+/**
+ * Todo lo que permite entrar como esa persona. No toca su historial de
+ * negocio: interacciones, ventas y seguimientos siguen donde estaban.
+ *
+ * Las cuentas se buscan por `userIdAndProvider` usando solo el primer campo
+ * del índice; `authAccounts` no tiene un índice de `userId` a secas.
+ */
+async function borrarCredenciales(ctx: MutationCtx, usuarioId: Id<"users">) {
+  const sesiones = await ctx.db
+    .query("authSessions")
+    .withIndex("userId", (q) => q.eq("userId", usuarioId))
+    .collect();
+  for (const sesion of sesiones) await borrarSesion(ctx, sesion._id);
+
+  const cuentas = await ctx.db
+    .query("authAccounts")
+    .withIndex("userIdAndProvider", (q) => q.eq("userId", usuarioId))
+    .collect();
+  for (const cuenta of cuentas) await borrarCuenta(ctx, cuenta._id);
+
+  return { sesiones: sesiones.length, cuentas: cuentas.length };
+}
+
+/**
+ * Barre las credenciales que apuntan a usuarios que ya no existen.
+ *
+ * Es para limpiar lo que dejaron las eliminaciones anteriores a JES-90. Usa las
+ * mismas funciones que el borrado normal, así que tampoco deja códigos sueltos
+ * colgando de las cuentas que se lleva.
+ *
+ *   npx convex run users:sanearHuerfanas
+ *
+ * Añade `--prod` para producción. Es idempotente: si no hay nada, no hace nada.
+ */
+export const sanearHuerfanas = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cuentas = await ctx.db.query("authAccounts").collect();
+    const cuentasBorradas: string[] = [];
+    for (const cuenta of cuentas) {
+      if ((await ctx.db.get(cuenta.userId)) !== null) continue;
+      cuentasBorradas.push(`${cuenta.provider}:${cuenta.providerAccountId}`);
+      await borrarCuenta(ctx, cuenta._id);
+    }
+
+    const sesiones = await ctx.db.query("authSessions").collect();
+    let sesionesBorradas = 0;
+    for (const sesion of sesiones) {
+      if ((await ctx.db.get(sesion.userId)) !== null) continue;
+      sesionesBorradas += 1;
+      await borrarSesion(ctx, sesion._id);
+    }
+
+    return { cuentasBorradas, sesionesBorradas };
   },
 });
 
