@@ -4,6 +4,7 @@ import { convexAuth } from "@convex-dev/auth/server";
 import type { DataModel } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { buscarUsuarioPorEmail, normalizaEmail } from "./helpers";
+import { RecuperarPorCorreo } from "./recuperar";
 
 /**
  * Autenticación — dos puertas: email con contraseña, y Google.
@@ -31,16 +32,48 @@ import { buscarUsuarioPorEmail, normalizaEmail } from "./helpers";
  */
 
 const VibeCRMPassword = Password<DataModel>({
+  // Por dónde sale el código de recuperación. Ver `recuperar.ts` (JES-87).
+  reset: RecuperarPorCorreo,
+
   profile(params) {
+    const crudo = String(params.email ?? "");
+    // Normalizado AQUÍ, antes de que la librería lo toque: este email es el
+    // que `@convex-dev/auth` usa como `account.id` de la credencial, tanto al
+    // dar de alta como al iniciar sesión (`providers/Password.ts:136`, usado
+    // en `:147` y `:159`). Si saliera en crudo, un alta escrita
+    // "Marta@Acme.es" dejaría `users.email` en minúsculas y
+    // `authAccounts.providerAccountId` con mayúsculas: dos formas del mismo
+    // correo, y un login que ya no encuentra su propia cuenta.
+    const email = normalizaEmail(crudo);
+
+    // ---- Recuperación: el correo tiene que venir ya canónico --------------
+    // Sin esto, el código de 8 dígitos se puede reventar a fuerza bruta.
+    //
+    // El límite de intentos de la librería se lleva por `params.email` TAL
+    // COMO LLEGA (`mutations/verifyCodeAndSignIn.js:23`), no por la cuenta que
+    // acaba encontrando. Como "marta@x.com", "Marta@x.com" y "marta@x.com "
+    // son la misma cuenta pero tres claves distintas —y los espacios finales
+    // no se acaban nunca—, cada variante estrenaría su propio cupo de diez
+    // intentos por hora y el techo dejaría de existir.
+    //
+    // Esta comprobación es el ÚNICO sitio donde se puede cortar: `profile()`
+    // se ejecuta en todos los flujos y lo primero de todo
+    // (`providers/Password.js:56`), mientras que el `authorize` del proveedor
+    // de correo corre después de haber buscado el código, demasiado tarde.
+    // Los dos controles hacen falta; no son el mismo repetido.
+    //
+    // Quien teclea el correo no se entera: la pantalla lo normaliza antes de
+    // llamar, en los dos pasos.
+    const flow = String(params.flow ?? "");
+    if (
+      (flow === "reset" || flow === "reset-verification") &&
+      crudo !== email
+    ) {
+      throw new Error("El correo debe llegar en su forma canónica");
+    }
+
     return {
-      // Normalizado AQUÍ, antes de que la librería lo toque: este email es el
-      // que `@convex-dev/auth` usa como `account.id` de la credencial, tanto al
-      // dar de alta como al iniciar sesión (`providers/Password.ts:136`, usado
-      // en `:147` y `:159`). Si saliera en crudo, un alta escrita
-      // "Marta@Acme.es" dejaría `users.email` en minúsculas y
-      // `authAccounts.providerAccountId` con mayúsculas: dos formas del mismo
-      // correo, y un login que ya no encuentra su propia cuenta.
-      email: normalizaEmail(String(params.email ?? "")),
+      email,
       name: (params.name as string) ?? "",
       rol: (params.rol as "propietaria" | "comercial") ?? "comercial",
       // Viaja hasta el guard de abajo; no se guarda en la base.

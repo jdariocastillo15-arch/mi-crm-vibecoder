@@ -13,6 +13,7 @@ import type * as clientes from "../clientes.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as interacciones from "../interacciones.js";
+import type * as recuperar from "../recuperar.js";
 import type * as seguimientos from "../seguimientos.js";
 import type * as users from "../users.js";
 import type * as ventas from "../ventas.js";
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   helpers: typeof helpers;
   http: typeof http;
   interacciones: typeof interacciones;
+  recuperar: typeof recuperar;
   seguimientos: typeof seguimientos;
   users: typeof users;
   ventas: typeof ventas;

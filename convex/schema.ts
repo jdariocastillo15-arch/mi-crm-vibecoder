@@ -143,4 +143,28 @@ export default defineSchema({
   })
     .index("by_cliente", ["clienteId"])
     .index("by_estado", ["estado"]),
+
+  /**
+   * Cuántos códigos de recuperación se han enviado a cada correo — implementa
+   * parte de JES-87.
+   *
+   * Existe porque el límite de Convex Auth NO cubre el envío. En
+   * `implementation/mutations/retrieveAccountWithCredentials.js:25` la
+   * comprobación vive dentro de un `if (account.secret !== undefined)`, y el
+   * flujo "reset" no lleva secret: sin esta tabla, pedir códigos sería gratis
+   * e ilimitado. Peor aún, cada petición borra el código anterior
+   * (`createVerificationCode.js:45-50`), así que repetirla también sirve para
+   * invalidar el código que alguien acaba de recibir.
+   *
+   * El email se guarda YA NORMALIZADO. Es lo que hace que el límite sea por
+   * cuenta y no por variante escrita.
+   */
+  limitesRecuperacion: defineTable({
+    /** Normalizado con `normalizaEmail`: minúsculas y sin espacios alrededor. */
+    email: v.string(),
+    /** Envíos dentro de la ventana en curso. */
+    enviados: v.number(),
+    /** Milisegundos desde epoch. Cuando la ventana caduca, se reinicia. */
+    ventanaInicio: v.number(),
+  }).index("email", ["email"]),
 });
