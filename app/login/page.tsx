@@ -183,7 +183,12 @@ export default function LoginPage({
       // A propósito: no se cuenta.
     }
     setCargando(false);
-    irA("codigo");
+    // Solo se avanza si se sigue donde estábamos. Los controles quedan
+    // desactivados mientras carga, así que en la práctica no debería poder
+    // moverse; esto cubre la respuesta que llega tarde de todos modos, para
+    // que nadie acabe en la pantalla del código después de haber vuelto atrás.
+    setPaso((actual) => (actual === "pedir" ? "codigo" : actual));
+    setIntentado(false);
   }
 
   /** Canjea el código por una contraseña nueva. Al acabar ya se está dentro. */
@@ -355,6 +360,7 @@ export default function LoginPage({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 error={errorEmail}
+                disabled={cargando}
               />
 
               <Button
@@ -366,7 +372,7 @@ export default function LoginPage({
                 Enviarme un código
               </Button>
 
-              <BotonVolver onClick={() => irA("login")} />
+              <BotonVolver onClick={() => irA("login")} disabled={cargando} />
             </form>
           )}
 
@@ -383,6 +389,7 @@ export default function LoginPage({
                 value={codigo}
                 onChange={(e) => setCodigo(e.target.value)}
                 error={errorCodigo}
+                disabled={cargando}
               />
 
               <div className="relative">
@@ -394,6 +401,7 @@ export default function LoginPage({
                   value={passwordNueva}
                   onChange={(e) => setPasswordNueva(e.target.value)}
                   error={errorPasswordNueva}
+                  disabled={cargando}
                 />
                 <button
                   type="button"
@@ -423,7 +431,7 @@ export default function LoginPage({
                 Cambiar contraseña y entrar
               </Button>
 
-              <BotonVolver onClick={() => irA("login")} />
+              <BotonVolver onClick={() => irA("login")} disabled={cargando} />
             </form>
           )}
         </div>
@@ -432,12 +440,19 @@ export default function LoginPage({
   );
 }
 
-function BotonVolver({ onClick }: { onClick: () => void }) {
+function BotonVolver({
+  onClick,
+  disabled,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="self-center rounded-md px-3 py-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-2"
+      disabled={disabled}
+      className="self-center rounded-md px-3 py-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:text-text-subtle disabled:hover:bg-transparent"
     >
       Volver a iniciar sesión
     </button>
