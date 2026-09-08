@@ -253,6 +253,47 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   },
 
   callbacks: {
+    /**
+     * El último cerrojo, y el único que se cierra en la MISMA transacción que
+     * escribe la sesión.
+     *
+     * POR QUÉ HACE FALTA, si `requireUser` ya rechaza a quien está de baja.
+     * Iniciar sesión no es una operación atómica: `signIn` es una ACCIÓN, y
+     * dentro de ella la librería valida la credencial primero
+     * (`implementation/signIn.ts`, `handleCredentials`) y solo después llama a
+     * la mutación que inserta en `authSessions` (`implementation/sessions.ts`).
+     * Entre esas dos cosas cabe una baja entera.
+     *
+     * Sin esto, la secuencia era: se valida la contraseña → llega la baja, que
+     * borra credenciales y sesiones y marca `bajaEn` → el login, ya en marcha,
+     * inserta una sesión NUEVA, posterior al borrado. Mientras hubiera `bajaEn`
+     * esa sesión no servía de nada, porque `requireUser` mira la ficha; pero al
+     * reactivar a esa persona la sesión seguía ahí y volvía a valer. Es decir:
+     * se recuperaba el acceso con una autenticación anterior a la baja, y sin
+     * pasar por el camino de JES-92.
+     *
+     * Aquí eso no cabe: la comprobación y el `insert` van en una sola mutación,
+     * así que o la baja ya está escrita cuando se lee —y esto lanza—, o entra
+     * después de que la sesión exista, y entonces le borra las sesiones como a
+     * cualquier otra. No hay hueco entre medias.
+     *
+     * Corre en TODOS los flujos —contraseña, Google, código por correo—, así
+     * que es también la red por debajo de las otras cuatro puertas.
+     */
+    async beforeSessionCreation(ctx, { userId }) {
+      // Igual que en `createOrUpdateUser`: el ctx del callback no viene tipado
+      // contra nuestro esquema.
+      const db = ctx.db as unknown as MutationCtx["db"];
+      const usuario = await db.get(userId as Id<"users">);
+
+      // Mismo mensaje que las demás puertas: no se distingue "de baja" de
+      // "nunca estuvo".
+      if (usuario === null) throw new Error("El registro está cerrado");
+      if (usuario.bajaEn !== undefined) {
+        throw new Error("El registro está cerrado");
+      }
+    },
+
     async createOrUpdateUser(ctx, { existingUserId, type, profile }) {
       // `createOrUpdateUser` recibe un ctx sin tipar contra nuestro esquema, así
       // que se recupera el tipado para poder consultar la tabla `users`.

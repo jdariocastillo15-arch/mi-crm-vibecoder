@@ -30,6 +30,31 @@ import type { Persona } from "./ListaEquipo";
  * decírselo a quien la ha dado de alta, no fingir que ha fallado todo.
  */
 
+/**
+ * ¿Este error del servidor va en el campo del correo?
+ *
+ * El alta y la edición NO dan el mismo mensaje, y ahí estaba el fallo: buscar
+ * la palabra «email» acertaba con «Ya hay alguien con ese email»
+ * (`users.ts#crearUsuario`) y fallaba con «Ya hay otra persona en el equipo
+ * con…» (`helpers.ts#asignarEmail`, que es por donde pasa la edición). El
+ * duplicado quedaba rechazado igual —eso nunca estuvo en duda—, pero se
+ * anunciaba en un aviso suelto en vez de junto al campo que hay que corregir.
+ *
+ * Esta es la lista de lo que el servidor dice sobre un correo. Si allí cambia
+ * un mensaje, hay que tocar aquí: es el precio de que el servidor mande y de no
+ * inventarse un protocolo de códigos de error solo para esto.
+ */
+const ERRORES_DE_CORREO = [
+  "ya hay otra persona en el equipo con",
+  "ya hay alguien con ese email",
+  "introduce un email válido",
+];
+
+function esErrorDeCorreo(mensaje: string): boolean {
+  const m = mensaje.toLowerCase();
+  return ERRORES_DE_CORREO.some((e) => m.includes(e));
+}
+
 const OPCIONES_ROL: { valor: RolUsuario; etiqueta: string }[] = [
   { valor: "comercial", etiqueta: ROL.comercial },
   { valor: "propietaria", etiqueta: ROL.propietaria },
@@ -113,7 +138,7 @@ export function OverlayUsuario({
       // enseña EN EL CAMPO: es donde está el problema, no en una alerta suelta.
       const mensaje =
         e instanceof Error ? e.message : "No se ha podido guardar";
-      if (mensaje.toLowerCase().includes("email")) {
+      if (esErrorDeCorreo(mensaje)) {
         setErrorServidor(mensaje);
       } else {
         mostrarError(mensaje);

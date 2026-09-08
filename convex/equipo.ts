@@ -129,6 +129,21 @@ function cuerpoTexto(nombre: string): string {
 }
 
 /**
+ * El nombre lo teclea la Dueña, así que esto no es una vía de ataque abierta a
+ * cualquiera; pero un apellido con `&` o unas comillas romperían el marcado sin
+ * necesidad de mala fe, y lo que se interpola en HTML se escapa. Sin excepciones
+ * por lo poco probable que parezca el caso.
+ */
+function escapaHtml(texto: string): string {
+  return texto
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
  * En HTML, con estilos en línea: los clientes de correo ignoran las hojas de
  * estilo, así que aquí no valen los tokens del design system. El verde es el
  * mismo `--color-primary` del CRM, escrito a mano.
@@ -146,7 +161,7 @@ function cuerpoHtml(nombre: string): string {
         <td style="padding:28px 24px">
           <p style="margin:0 0 4px;font-size:17px;font-weight:600">Vibe CRM</p>
           <p style="margin:0 0 20px;font-size:14px;color:#5c625c">
-            ${saludo(nombre)} Te han añadido al equipo.
+            ${escapaHtml(saludo(nombre))} Te han añadido al equipo.
           </p>
           <p style="margin:0 0 20px;font-size:14px">
             Entra, pon tu correo y dale a Continuar. Te llegará un código para
