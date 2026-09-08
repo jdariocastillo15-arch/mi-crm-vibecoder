@@ -1,10 +1,23 @@
 import Google from "@auth/core/providers/google";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
-import type { DataModel } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
+import type { DataModel, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import type { FunctionReference } from "convex/server";
 import { buscarUsuarioPorEmail, normalizaEmail } from "./helpers";
 import { RecuperarPorCorreo } from "./recuperar";
+
+/**
+ * Lo único que necesitamos del `ctx` que la librería le pasa a `authorize`: es
+ * de acción, así que no trae `db`, pero sí sabe ejecutar mutaciones.
+ */
+type ContextoDeAccion = {
+  runMutation: (
+    referencia: FunctionReference<"mutation", "internal", { usuarioId: Id<"users"> }, null>,
+    argumentos: { usuarioId: Id<"users"> },
+  ) => Promise<null>;
+};
 
 /**
  * Autenticación — dos puertas: email con contraseña, y Google.
@@ -151,7 +164,36 @@ const VibeCRMPassword = {
     ...conOptions.options,
     authorize: async (params: Record<string, unknown>, ctx: unknown) => {
       try {
-        return await autorizarOriginal(params, ctx);
+        const resultado = await autorizarOriginal(params, ctx);
+
+        // ---- La contraseña acaba de quedar guardada -----------------------
+        // Este es el ÚNICO punto del servidor que lo sabe con certeza.
+        // `Password.js:121-126` persiste con `modifyAccountCredentials` y solo
+        // DESPUÉS devuelve `{ userId, sessionId }`; llegar aquí con un
+        // resultado es haber pasado por ahí.
+        //
+        // La primera versión de esto lo hacía una mutación pública que se
+        // fiaba de la sesión, con el argumento de que una sesión solo existe
+        // si la contraseña se guardó. Es falso: también hay sesiones de
+        // Google, así que quien entrara por esa puerta podía retirarse la
+        // marca sin haber elegido contraseña y quedarse pidiéndole al login un
+        // secreto inexistente (M4).
+        const flujo = String(params.flow ?? "");
+        if (flujo === "reset-verification" || flujo === "signUp") {
+          const usuarioId = (resultado as { userId?: Id<"users"> } | null)
+            ?.userId;
+          if (usuarioId !== undefined) {
+            // `authorize` corre con contexto de acción —de ahí que la librería
+            // pueda usar `createAccount` y compañía—, así que no hay `db` a
+            // mano y se pasa por una mutación.
+            await (ctx as ContextoDeAccion).runMutation(
+              internal.acceso.marcarContrasenaElegida,
+              { usuarioId },
+            );
+          }
+        }
+
+        return resultado;
       } catch (error) {
         const mensaje = error instanceof Error ? error.message : String(error);
         if (ERRORES_QUE_DELATAN.some((pista) => mensaje.includes(pista))) {
@@ -259,6 +301,38 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       // Iniciar sesión en una cuenta que ya existe no pasa por aquí, pero si
       // algún día lo hiciera, no es un alta y se deja pasar.
       if (existingUserId !== null) return existingUserId;
+
+      // ---- Vía de servidor: ponerle credencial a una ficha ya autorizada ----
+      // JES-92. "Dar de alta a alguien nuevo" y "ponerle contraseña a alguien
+      // que el CRM ya conoce" son cosas distintas, y hasta ahora el cerrojo las
+      // trataba igual: `CODIGO_ALTA` era la única llave para las dos.
+      //
+      // Eso dejaba fuera a quien fue provisionado sin credencial —hoy mismo,
+      // en producción, hay una persona así—. No puede entrar con contraseña, y
+      // el flujo de código de JES-87 tampoco le sirve, porque busca primero una
+      // cuenta `password` y falla antes de generar nada si no existe. Alguien
+      // tiene que poder crearle esa cuenta, y ese alguien es el servidor.
+      //
+      // POR QUÉ ESTA MARCA NO SE PUEDE FALSIFICAR desde el navegador:
+      //
+      //   · Por `auth:signIn`, el `profile` lo construye `profile()` ahí arriba,
+      //     que arma su objeto CAMPO A CAMPO y no vuelca `params`. Lo que no
+      //     esté escrito ahí no llega hasta aquí, se mande lo que se mande.
+      //   · `createAccount` en cambio recibe el `profile` DIRECTAMENTE de quien
+      //     la llama, y a ella solo la llama nuestro propio código de servidor
+      //     (`acceso.ts`), que no es alcanzable desde el cliente.
+      //
+      // Si algún día `profile()` empezara a volcar `params`, esto se convierte
+      // en un agujero. Por eso el comentario está aquí y no en otra parte.
+      //
+      // Y sigue SIN crear usuarios: exige que la ficha exista, igual que Google.
+      // `CODIGO_ALTA` no se toca y esta vía no lo necesita.
+      if (profile.altaDeServidor === true) {
+        if (email.length === 0) throw new Error("El registro está cerrado");
+        const autorizada = await buscarUsuarioPorEmail(db, email);
+        if (autorizada === null) throw new Error("El registro está cerrado");
+        return autorizada._id;
+      }
 
       const esperado = process.env.CODIGO_ALTA;
       const aportado = String(profile.codigoAlta ?? "");
