@@ -1,13 +1,52 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 
-/** Devuelve el usuario de la sesión, o lanza si no hay sesión. */
+/** El mismo texto para todo lo que sea «tu sesión no vale». */
+const SIN_SESION = "No hay sesión iniciada";
+
+/**
+ * Devuelve el usuario de la sesión, o lanza.
+ *
+ * Comprueba TRES cosas, y ninguna sobra:
+ *
+ * 1. Que el JWT trae un usuario.
+ * 2. Que **la sesión de ese JWT sigue viva** y es suya. Esto no es paranoia:
+ *    `getAuthUserId` saca el usuario del token firmado y no mira la base, así
+ *    que un JWT no caducado sigue valiendo aunque su sesión se haya borrado.
+ *    Con la baja lógica eso era un agujero concreto —dar de baja, borrar sus
+ *    sesiones, reactivarla, y el token viejo volvía a funcionar—, pero el
+ *    problema es más general: revocar una sesión no surtía efecto hasta que
+ *    caducara su JWT. Lo encontró auditoría (B2).
+ * 3. Que esa persona no está de baja.
+ *
+ * Los tres fallos dan el MISMO mensaje. Distinguirlos le diría a quien tenga un
+ * token viejo por qué exactamente ha dejado de valer.
+ */
 export async function requireUser(ctx: QueryCtx | MutationCtx) {
   const userId = await getAuthUserId(ctx);
-  if (userId === null) throw new Error("No hay sesión iniciada");
+  if (userId === null) throw new Error(SIN_SESION);
+
+  const sesionId = await getAuthSessionId(ctx);
+  if (sesionId === null) throw new Error(SIN_SESION);
+
+  // El id sale del token, así que puede ser cualquier cosa si alguien lo forja:
+  // `db.get` con un id mal formado lanza, y ese error no debe salir en crudo.
+  let sesion: Doc<"authSessions"> | null;
+  try {
+    sesion = await ctx.db.get(sesionId);
+  } catch {
+    throw new Error(SIN_SESION);
+  }
+
+  if (sesion === null) throw new Error(SIN_SESION);
+  if (sesion.userId !== userId) throw new Error(SIN_SESION);
+  if (sesion.expirationTime <= Date.now()) throw new Error(SIN_SESION);
+
   const user = await ctx.db.get(userId);
   if (user === null) throw new Error("El usuario de la sesión ya no existe");
+  if (user.bajaEn !== undefined) throw new Error(SIN_SESION);
+
   return user;
 }
 

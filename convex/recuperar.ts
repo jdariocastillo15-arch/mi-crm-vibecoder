@@ -30,7 +30,8 @@ const VENTANA_MS = 60 * 60 * 1000;
 
 const DIGITOS = 8;
 
-const REMITENTE = "Vibe CRM <no-responder@vibe-crm-pro.net>";
+/** Compartido con `equipo.ts`: un solo remitente para todo lo que sale. */
+export const REMITENTE = "Vibe CRM <no-responder@vibe-crm-pro.net>";
 
 /**
  * Un código de 8 dígitos, sin sesgo.

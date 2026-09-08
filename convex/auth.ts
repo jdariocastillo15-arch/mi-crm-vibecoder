@@ -286,6 +286,14 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           throw new Error("El registro está cerrado");
         }
 
+        // Dada de baja: la ficha se conserva para que el historial siga
+        // diciendo quién hizo cada cosa, pero no abre ninguna puerta. Aquí
+        // importa especialmente porque Google resuelve POR CORREO y la ficha
+        // sigue estando: sin esto, la baja no serviría de nada contra Google.
+        if (provisionado.bajaEn !== undefined) {
+          throw new Error("El registro está cerrado");
+        }
+
         // La cuenta de Google estaba enganchada a otra persona: alguien cambió
         // un email por el medio. No se reengancha sola, se cierra la puerta.
         if (existingUserId !== null && existingUserId !== provisionado._id) {
@@ -331,6 +339,12 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         if (email.length === 0) throw new Error("El registro está cerrado");
         const autorizada = await buscarUsuarioPorEmail(db, email);
         if (autorizada === null) throw new Error("El registro está cerrado");
+        // Sin esto, `acceso.ts` le crearía credencial de contraseña a alguien
+        // dado de baja: es la vía por la que el servidor prepara cuentas, y no
+        // debe preparar la de quien ya no tiene acceso.
+        if (autorizada.bajaEn !== undefined) {
+          throw new Error("El registro está cerrado");
+        }
         return autorizada._id;
       }
 
