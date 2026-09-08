@@ -4,19 +4,25 @@ import { convexAuth } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import type { FunctionReference } from "convex/server";
+import type { DefaultFunctionArgs, FunctionReference } from "convex/server";
 import { buscarUsuarioPorEmail, normalizaEmail } from "./helpers";
-import { RecuperarPorCorreo } from "./recuperar";
+import { FALLO_DE_ENVIO, RecuperarPorCorreo } from "./recuperar";
 
 /**
  * Lo único que necesitamos del `ctx` que la librería le pasa a `authorize`: es
  * de acción, así que no trae `db`, pero sí sabe ejecutar mutaciones.
+ *
+ * Genérico en los argumentos y en el resultado porque desde aquí se llama a
+ * tres mutaciones distintas —marcar la contraseña como elegida, reservar cupo
+ * de recuperación y devolver esa reserva— y cada una tiene su forma. El tipo
+ * sigue atado a `FunctionReference`, así que el compilador comprueba que los
+ * argumentos de cada llamada casan con la mutación que se invoca.
  */
 type ContextoDeAccion = {
-  runMutation: (
-    referencia: FunctionReference<"mutation", "internal", { usuarioId: Id<"users"> }, null>,
-    argumentos: { usuarioId: Id<"users"> },
-  ) => Promise<null>;
+  runMutation: <Argumentos extends DefaultFunctionArgs, Resultado>(
+    referencia: FunctionReference<"mutation", "internal", Argumentos, Resultado>,
+    argumentos: Argumentos,
+  ) => Promise<Resultado>;
 };
 
 /**
@@ -164,6 +170,95 @@ const VibeCRMPassword = {
     ...conOptions.options,
     authorize: async (params: Record<string, unknown>, ctx: unknown) => {
       try {
+        // ---- El cupo de recuperación, ANTES de tocar el código vigente ----
+        // `providers/Password.js:88` mete el flujo "reset" DENTRO de este
+        // `authorize`, así que este es el punto por el que pasan todas las
+        // entradas: la pantalla de "Olvidé mi contraseña", el trabajo
+        // programado de `acceso.ts#prepararYEnviar`, y una llamada pelada a
+        // `auth:signIn` —que es pública y no pide sesión—. Reservar en
+        // cualquiera de esos tres sitios habría dejado los otros dos abiertos.
+        //
+        // Y va aquí y no en el envío porque el orden importa: `signIn.js:62`
+        // genera el código —borrando el anterior, `createVerificationCode.js:47`—
+        // y solo en `:79` manda el correo. Mirar el cupo al enviar protegía el
+        // buzón pero no el código: cualquiera podía invalidar en bucle el que
+        // otra persona acababa de recibir, y de paso gastarle sus intentos.
+        //
+        // No se envuelve la exportación de `signIn` de más abajo, que sería el
+        // otro sitio por el que pasa todo, porque por ahí pasan además la
+        // renovación de sesión con `refreshToken`, el redirect de Google y el
+        // login normal. Esto es más estrecho: solo la contraseña, solo "reset".
+        const flujoEntrante = String(params.flow ?? "");
+        if (flujoEntrante === "reset") {
+          // `redirectTo` NO se usa en la recuperación, y se rechaza ANTES de
+          // reservar y antes de delegar. Cerrarlo aquí tapa un agujero muy
+          // concreto: la librería crea el código —borrando el anterior— en
+          // `signIn.js:62`, y solo DESPUÉS procesa la redirección en `:71`,
+          // que lanza si el valor no es una cadena o no cuadra con `SITE_URL`
+          // (`redirects.js:4` y `:23`). O sea que un `redirectTo` inválido
+          // tiraba el código de otra persona y reventaba a continuación.
+          //
+          // Se rechaza en vez de descartarlo en silencio porque descartarlo
+          // dejaría pasar la petición como un reset normal, gastando cupo y
+          // regenerando el código; así no se toca ninguna de las dos cosas.
+          // Y no se valida imitando a `redirects.js` para no duplicar una
+          // lógica interna que puede cambiar: aquí el parámetro sencillamente
+          // no pinta nada, porque el correo manda un código de ocho dígitos y
+          // no un enlace, así que la URL que se construiría con él no se usa.
+          // El único `redirectTo` del proyecto es el de Google
+          // (`app/login/page.tsx:148`), que va por otro proveedor y no pasa
+          // por aquí.
+          if (params.redirectTo !== undefined) {
+            throw new Error("`redirectTo` no se usa al recuperar la contraseña");
+          }
+
+          const correo = normalizaEmail(String(params.email ?? ""));
+          const { permitido, ventanaInicio } = await (
+            ctx as ContextoDeAccion
+          ).runMutation(internal.recuperar.reservarEnvio, { email: correo });
+
+          // Sin cupo no se sigue: no se genera código, así que el que la
+          // persona tenga en el buzón sobrevive intacto.
+          //
+          // Se devuelve `null` y NO se lanza, que es exactamente lo que
+          // devuelve un "reset" que sí sale: `signInViaProvider` da `null` para
+          // un proveedor de correo (`implementation/index.js:412`), y
+          // `handleCredentials` lo convierte en `{tokens: null}`
+          // (`signIn.js:104-105`). Desde el navegador las dos cosas se ven
+          // igual, que es lo que se busca: decir "sin cupo" delataría que ese
+          // correo existe y ya ha pedido códigos.
+          if (!permitido) return null;
+
+          try {
+            return await autorizarOriginal(params, ctx);
+          } catch (error) {
+            // SOLO se devuelve la reserva si lo que falló fue el envío.
+            //
+            // Perdonar cualquier excepción era un agujero por sí mismo: para
+            // cuando algo revienta, el código de la persona ya está borrado
+            // (`signIn.js:62`), así que un error provocado a propósito después
+            // de esa línea tiraba el código ajeno y encima recuperaba el cupo,
+            // en bucle y gratis. Rechazar `redirectTo` arriba cierra la vía
+            // conocida; esto cierra la clase entera, incluida la que se
+            // descubra mañana: si el fallo no lleva la marca de `recuperar.ts`,
+            // el intento se cobra igual.
+            //
+            // Lo que sí se perdona es Resend caído, que es el caso real: sin
+            // esto, tres intentos con el proveedor muerto dejaban a esa persona
+            // una hora fuera sin haber recibido nada.
+            const mensaje =
+              error instanceof Error ? error.message : String(error);
+            if (mensaje.includes(FALLO_DE_ENVIO)) {
+              // Y solo la propia: va atada a la ventana con la que se contó.
+              await (ctx as ContextoDeAccion).runMutation(
+                internal.recuperar.liberarReserva,
+                { email: correo, ventanaInicio },
+              );
+            }
+            throw error;
+          }
+        }
+
         const resultado = await autorizarOriginal(params, ctx);
 
         // ---- La contraseña acaba de quedar guardada -----------------------
