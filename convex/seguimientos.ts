@@ -130,10 +130,16 @@ export const crear = mutation({
     // No basta el formato: "2026-02-30" lo pasa y luego rompe la clasificación.
     if (!esFechaValida(args.vence)) throw new Error("Indica una fecha");
 
-    // El argumento es API pública: si viene, tiene que apuntar a alguien real.
+    // El argumento es API pública: si viene, tiene que apuntar a alguien real
+    // Y ACTIVO. Comprobar solo que existe no basta desde que hay baja lógica:
+    // la ficha de quien se da de baja se conserva, así que seguía pasando esta
+    // validación y se le podían asignar pendientes nuevos —justo después de
+    // haberle reasignado los suyos—. Y el desplegable tampoco protege: guarda
+    // la selección aunque la persona desaparezca de la lista mientras el
+    // formulario está abierto. Lo encontró auditoría (M1).
     if (args.responsableId !== undefined) {
       const responsable = await ctx.db.get(args.responsableId);
-      if (responsable === null) {
+      if (responsable === null || responsable.bajaEn !== undefined) {
         throw new Error("Esa persona ya no está en el equipo");
       }
     }

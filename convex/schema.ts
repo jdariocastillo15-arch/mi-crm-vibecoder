@@ -87,6 +87,21 @@ export default defineSchema({
      * guardada, nunca antes.
      */
     contrasenaPendiente: v.optional(v.boolean()),
+    /**
+     * Cuándo se dio de baja a esta persona. Ausente = está activa.
+     *
+     * La baja es LÓGICA y no un borrado, porque `seguimientos.responsableId` e
+     * `interacciones.autorId` son referencias obligatorias: borrar la fila las
+     * dejaba apuntando a alguien que ya no existe. Conservándola, el historial
+     * sigue diciendo quién hizo cada cosa aunque esa persona ya no esté.
+     *
+     * Lo que sí se le quita es el acceso: sus credenciales se borran, y las
+     * puertas de `auth.ts`, `acceso.ts` y `helpers.ts#requireUser` la rechazan.
+     *
+     * Marca temporal en vez de booleano: dice también *cuándo*, y el valor
+     * ausente ya significa «activa» sin migrar las filas que ya existían.
+     */
+    bajaEn: v.optional(v.number()),
   }).index("email", ["email"]),
 
   clientes: defineTable({

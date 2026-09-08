@@ -109,6 +109,11 @@ export const estadoAcceso = mutation({
     // Ni se crea nada, ni se manda nada, ni se apunta nada.
     if (usuario === null) return "codigo" as const;
 
+    // Dada de baja: se responde igual que a un desconocido y no se hace nada.
+    // La ficha existe —se conserva para el historial— pero no abre puertas, y
+    // esta es una de ellas: sin este corte, la baja podría estrenar contraseña.
+    if (usuario.bajaEn !== undefined) return "codigo" as const;
+
     // La contraseña ya es suya: se la pedimos y aquí no se toca nada.
     if (cuenta !== null && usuario.contrasenaPendiente !== true) {
       return "contrasena" as const;
@@ -137,6 +142,15 @@ export const prepararYEnviar = internalAction({
   args: { email: v.string(), faltaCuenta: v.boolean() },
   returns: v.null(),
   handler: async (ctx, { email, faltaCuenta }) => {
+    // Se vuelve a comprobar, y no es redundante: esto es trabajo PROGRAMADO.
+    // Uno lanzado justo antes de una baja se ejecuta después de ella, y sin
+    // esta comprobación le crearía la credencial a quien acaba de perder el
+    // acceso. Lo señaló auditoría.
+    const sigueActiva = await ctx.runQuery(internal.acceso.estaActiva, {
+      email,
+    });
+    if (!sigueActiva) return null;
+
     if (faltaCuenta) {
       try {
         await createAccount<DataModel>(ctx, {
@@ -173,6 +187,16 @@ export const prepararYEnviar = internalAction({
     });
 
     return null;
+  },
+});
+
+/** ¿La ficha de este correo existe y sigue activa? */
+export const estaActiva = internalQuery({
+  args: { email: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, { email }) => {
+    const usuario = await buscarUsuarioPorEmail(ctx.db, normalizaEmail(email));
+    return usuario !== null && usuario.bajaEn === undefined;
   },
 });
 

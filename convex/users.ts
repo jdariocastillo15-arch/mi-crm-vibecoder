@@ -43,7 +43,13 @@ export const listEquipo = query({
   args: {},
   handler: async (ctx) => {
     await requireUser(ctx);
-    const users = await ctx.db.query("users").collect();
+    // Las bajas no salen: no están en el equipo. Su ficha se conserva para que
+    // el historial siga diciendo quién hizo cada cosa, no para listarlas.
+    // Filtrar AQUÍ, en el servidor, es lo que hace que también desaparezcan del
+    // desplegable de responsable sin tocar ese componente.
+    const users = (await ctx.db.query("users").collect()).filter(
+      (u) => u.bajaEn === undefined,
+    );
     return users.map((u) => ({
       _id: u._id,
       name: u.name ?? "",
@@ -132,10 +138,84 @@ export const eliminarUsuario = mutation({
     // correo. Ver `borrarCredenciales` (JES-90).
     await borrarCredenciales(ctx, usuarioId);
 
-    // El historial que registró esta persona NO se borra con ella: sus
-    // interacciones, ventas y seguimientos siguen existiendo. Queda pendiente
-    // decidir qué pasa con sus seguimientos pendientes — ver JES-70.
-    await ctx.db.delete(usuarioId);
+    // Sus pendientes pasan a quien la da de baja. Si se quedaran a su nombre
+    // no los vería nadie: ella ya no entra, y su nombre desaparece de las
+    // listas. Solo los que están SIN HACER — los terminados son historial y se
+    // quedan como estaban, diciendo la verdad de quién los hizo.
+    const suyos = await ctx.db
+      .query("seguimientos")
+      .withIndex("by_responsable", (q) => q.eq("responsableId", usuarioId))
+      .collect();
+    let reasignados = 0;
+    for (const seguimiento of suyos) {
+      if (seguimiento.hecho) continue;
+      await ctx.db.patch(seguimiento._id, { responsableId: actual._id });
+      reasignados += 1;
+    }
+
+    // Y la ficha se CONSERVA, marcada de baja. No se borra, y es deliberado:
+    // `seguimientos.responsableId` e `interacciones.autorId` son referencias
+    // obligatorias, así que borrar la fila las dejaba apuntando a alguien que
+    // ya no existe. Conservándola, el historial sigue diciendo quién hizo cada
+    // cosa aunque esa persona ya no forme parte del equipo.
+    //
+    // El acceso, en cambio, se ha ido entero: sin credenciales, y las puertas
+    // de `auth.ts`, `acceso.ts` y `helpers.ts#requireUser` la rechazan.
+    await ctx.db.patch(usuarioId, { bajaEn: Date.now() });
+
+    return { reasignados };
+  },
+});
+
+/**
+ * Dar de alta a alguien del equipo — implementa JES-69.
+ *
+ * Es corto, y lo es gracias a JES-92: basta con crear la ficha. Esa persona
+ * entra en el CRM, pone su correo, y el login se encarga del resto —le crea la
+ * credencial y le manda el código para elegir contraseña—. Aquí NO se crean
+ * credenciales, no se generan códigos y no se toca `authAccounts`.
+ *
+ * Antes de JES-92 esto era la parte cara: había que montarle la credencial y
+ * una invitación con código, porque si no el login lo mandaba a «Recuperar
+ * contraseña», que es tratar como despistado a quien nunca tuvo ninguna.
+ *
+ * El aviso por correo va aparte, en `equipo.ts`, y a propósito: si falla, el
+ * alta sigue siendo válida y esa persona puede entrar igual.
+ */
+export const crearUsuario = mutation({
+  args: { name: v.string(), email: v.string(), rol: rolUsuario },
+  handler: async (ctx, { name, email, rol }) => {
+    await requirePropietaria(ctx);
+
+    const nombre = name.trim();
+    if (nombre.length === 0) throw new Error("Indica un nombre");
+    if (!esEmailValido(email)) throw new Error("Introduce un email válido");
+
+    // Si ese correo es de alguien que se dio de baja, se REACTIVA su ficha en
+    // vez de fallar por duplicado. Es lo que espera cualquiera al volver a
+    // añadir a una persona, y evita fichas fantasma que bloquean su propio
+    // correo para siempre. Recupera su historial, que es lo suyo.
+    const existente = await buscarUsuarioPorEmail(ctx.db, normalizaEmail(email));
+    if (existente !== null) {
+      if (existente.bajaEn === undefined) {
+        throw new Error("Ya hay alguien con ese email");
+      }
+      await ctx.db.patch(existente._id, {
+        name: nombre,
+        rol,
+        bajaEn: undefined,
+      });
+      return { usuarioId: existente._id, reactivada: true };
+    }
+
+    const usuarioId = await ctx.db.insert("users", { name: nombre, rol });
+    // El correo va por `asignarEmail` y no en el insert: valida el formato, lo
+    // deja en su forma canónica, exige que no lo tenga nadie más y arrastraría
+    // la credencial de contraseña si existiera. Escribirlo a mano dejaría dos
+    // formas del mismo correo según la puerta por la que se entre.
+    await asignarEmail(ctx, usuarioId, email);
+
+    return { usuarioId, reactivada: false };
   },
 });
 
@@ -324,10 +404,18 @@ export const sanearHuerfanas = internalMutation({
   },
 });
 
-/** El equipo nunca puede quedarse sin Dueña, tampoco desde el terminal. */
+/**
+ * El equipo nunca puede quedarse sin Dueña, tampoco desde el terminal.
+ *
+ * Solo cuentan las ACTIVAS. Contar a una de baja sería peor que inútil: haría
+ * creer que queda alguien al mando y dejaría quitarle el rol —o dar de baja— a
+ * la última Dueña de verdad, con el equipo entero sin nadie que pueda
+ * gestionarlo y sin forma de arreglarlo desde la propia aplicación.
+ */
 async function assertQuedaAlgunaDuena(ctx: MutationCtx, excepto: Id<"users">) {
   const duenas = (await ctx.db.query("users").collect()).filter(
-    (u) => u.rol === "propietaria" && u._id !== excepto,
+    (u) =>
+      u.rol === "propietaria" && u._id !== excepto && u.bajaEn === undefined,
   );
   if (duenas.length === 0) {
     throw new Error("El equipo no puede quedarse sin nadie que lo lleve");
