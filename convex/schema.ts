@@ -72,8 +72,21 @@ export default defineSchema({
     emailVerificationTime: v.optional(v.number()),
     image: v.optional(v.string()),
     isAnonymous: v.optional(v.boolean()),
-    // ---- Campo propio de Vibe CRM ----
+    // ---- Campos propios de Vibe CRM ----
     rol: v.optional(rolUsuario),
+    /**
+     * Esta persona tiene credencial de contraseña, pero todavía NO la ha
+     * elegido ella: la creó el servidor con un secreto aleatorio para que el
+     * flujo de código de JES-87 tuviera una cuenta a la que agarrarse.
+     *
+     * Hace falta porque la sola existencia de la fila en `authAccounts` no
+     * distingue «ya eligió su contraseña» de «todavía no», y de eso depende
+     * que el login le pida la contraseña o le mande un código (JES-92).
+     *
+     * Ausente = la contraseña es suya. Se limpia solo cuando la nueva queda
+     * guardada, nunca antes.
+     */
+    contrasenaPendiente: v.optional(v.boolean()),
   }).index("email", ["email"]),
 
   clientes: defineTable({

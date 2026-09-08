@@ -137,6 +137,14 @@ async function enviarCodigo(
     throw new Error("Falta AUTH_RESEND_KEY en el despliegue");
   }
 
+  // El mismo código sirve para dos situaciones distintas, y el correo no puede
+  // tratarlas igual: a quien estrena contraseña no se le dice que "ha pedido
+  // cambiarla", porque no tenía ninguna. Es el fondo de JES-92, y arreglarlo
+  // solo en la pantalla lo dejaría a medias.
+  const inicial = await ctx.runQuery(internal.acceso.esConfiguracionInicial, {
+    email,
+  });
+
   const minutos = Math.round(CADUCIDAD_SEGUNDOS / 60);
   const respuesta = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -147,9 +155,11 @@ async function enviarCodigo(
     body: JSON.stringify({
       from: REMITENTE,
       to: [email],
-      subject: `Tu código para entrar en Vibe CRM: ${params.token}`,
-      text: cuerpoTexto(params.token, minutos),
-      html: cuerpoHtml(params.token, minutos),
+      subject: inicial
+        ? `Tu código para configurar tu contraseña de Vibe CRM: ${params.token}`
+        : `Tu código para entrar en Vibe CRM: ${params.token}`,
+      text: cuerpoTexto(params.token, minutos, inicial),
+      html: cuerpoHtml(params.token, minutos, inicial),
     }),
   });
 
@@ -160,15 +170,22 @@ async function enviarCodigo(
   }
 }
 
-function cuerpoTexto(codigo: string, minutos: number): string {
+function cuerpoTexto(
+  codigo: string,
+  minutos: number,
+  inicial: boolean,
+): string {
   return [
-    "Has pedido cambiar tu contraseña de Vibe CRM.",
+    inicial
+      ? "Ya puedes entrar en Vibe CRM. Solo te falta elegir tu contraseña."
+      : "Has pedido cambiar tu contraseña de Vibe CRM.",
     "",
     `Tu código es: ${codigo}`,
     "",
     `Caduca en ${minutos} minutos y solo sirve una vez.`,
-    "Si no has sido tú, no hace falta que hagas nada: sin este código,",
-    "tu contraseña no cambia.",
+    inicial
+      ? "Si caduca, vuelve a poner tu correo en la pantalla de entrada y te\nmandamos otro."
+      : "Si no has sido tú, no hace falta que hagas nada: sin este código,\ntu contraseña no cambia.",
   ].join("\n");
 }
 
@@ -177,7 +194,20 @@ function cuerpoTexto(codigo: string, minutos: number): string {
  * ignoran las hojas de estilo, así que aquí no valen los tokens del design
  * system. El verde es el mismo `--color-primary` del CRM, escrito a mano.
  */
-function cuerpoHtml(codigo: string, minutos: number): string {
+function cuerpoHtml(
+  codigo: string,
+  minutos: number,
+  inicial: boolean,
+): string {
+  const entradilla = inicial
+    ? "Ya puedes entrar. Solo te falta elegir tu contraseña."
+    : "Has pedido cambiar tu contraseña.";
+  const cierre = inicial
+    ? `Caduca en ${minutos} minutos y solo sirve una vez. Si caduca, vuelve a
+            poner tu correo en la pantalla de entrada y te mandamos otro.`
+    : `Caduca en ${minutos} minutos y solo sirve una vez. Si no has sido tú,
+            no hace falta que hagas nada: sin este código, tu contraseña no cambia.`;
+
   return `<!doctype html>
 <html lang="es">
   <body style="margin:0;padding:24px;background:#f7f8f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1c1a">
@@ -186,15 +216,14 @@ function cuerpoHtml(codigo: string, minutos: number): string {
         <td style="padding:28px 24px">
           <p style="margin:0 0 4px;font-size:17px;font-weight:600">Vibe CRM</p>
           <p style="margin:0 0 20px;font-size:14px;color:#5c625c">
-            Has pedido cambiar tu contraseña.
+            ${entradilla}
           </p>
           <p style="margin:0 0 8px;font-size:13px;color:#5c625c">Tu código es:</p>
           <p style="margin:0 0 20px;font-size:30px;font-weight:600;letter-spacing:5px;color:#2f7d3f">
             ${codigo}
           </p>
           <p style="margin:0;font-size:13px;color:#5c625c">
-            Caduca en ${minutos} minutos y solo sirve una vez. Si no has sido tú,
-            no hace falta que hagas nada: sin este código, tu contraseña no cambia.
+            ${cierre}
           </p>
         </td>
       </tr>
