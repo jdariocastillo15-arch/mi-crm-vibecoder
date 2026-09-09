@@ -92,10 +92,21 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
             </span>
           </Link>
+          {/* Espera a `signOut()` y DESPUÉS navega. Sin la navegación, la
+              sesión se limpia pero la URL se queda donde estaba —el middleware
+              solo actúa en la siguiente— y la pantalla se queda pidiendo datos
+              que ya no puede traer. Es JES-89, y aquí se cierra también para el
+              diálogo de "Mi cuenta". Sin `await` la navegación adelantaría al
+              borrado de los tokens y el middleware devolvería a /hoy. */}
           <IconButton
             aria-label="Cerrar sesión"
             size="compact"
-            onClick={() => void signOut()}
+            onClick={() => {
+              void (async () => {
+                await signOut();
+                router.replace("/login");
+              })();
+            }}
           >
             <LogOut size={20} strokeWidth={1.5} aria-hidden />
           </IconButton>
