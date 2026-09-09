@@ -11,6 +11,7 @@
 import type * as acceso from "../acceso.js";
 import type * as auth from "../auth.js";
 import type * as clientes from "../clientes.js";
+import type * as cuenta from "../cuenta.js";
 import type * as equipo from "../equipo.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   acceso: typeof acceso;
   auth: typeof auth;
   clientes: typeof clientes;
+  cuenta: typeof cuenta;
   equipo: typeof equipo;
   helpers: typeof helpers;
   http: typeof http;

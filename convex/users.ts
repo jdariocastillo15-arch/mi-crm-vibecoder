@@ -10,6 +10,7 @@ import {
   normalizaEmail,
   buscarUsuarioPorEmail,
   asignarEmail,
+  tieneContrasenaPropia,
 } from "./helpers";
 
 /**
@@ -22,12 +23,24 @@ import {
  * credencial de contraseña.
  */
 
-/** El usuario de la sesión. Devuelve null si no hay sesión, sin lanzar. */
+/**
+ * El usuario de la sesión. Devuelve null si no hay sesión, sin lanzar.
+ *
+ * Devuelve el documento entero MÁS `tieneContrasena`, que necesita «Mi cuenta»
+ * (JES-48) para no ofrecer «Cambiar contraseña» a quien todavía no tiene
+ * ninguna. Se añade conservando el documento, así que los cuatro consumidores
+ * actuales —`AppShell`, la pantalla de Equipo y los overlays de interacción y
+ * de seguimiento— siguen leyendo lo mismo que leían.
+ *
+ * `tieneContrasena` es un dato de CONVENIENCIA para la interfaz. No autoriza
+ * nada: `cuenta.ts#cambiarContrasena` vuelve a comprobarlo en el servidor.
+ */
 export const me = query({
   args: {},
   handler: async (ctx) => {
     try {
-      return await requireUser(ctx);
+      const user = await requireUser(ctx);
+      return { ...user, tieneContrasena: await tieneContrasenaPropia(ctx, user) };
     } catch {
       return null;
     }

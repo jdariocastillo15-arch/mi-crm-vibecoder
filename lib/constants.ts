@@ -77,3 +77,20 @@ export const AVISOS = {
 
 /** El corte entre las dos disposiciones. Coincide con `md` de Tailwind. */
 export const BREAKPOINT_DESKTOP = 768;
+
+/**
+ * Longitud mínima de una contraseña.
+ *
+ * No es una preferencia nuestra: es lo que exige
+ * `validateDefaultPasswordRequirements` de la librería
+ * (`providers/Password.js:171-175`). Se comprueba en el navegador para dar el
+ * mensaje pronto, en vez de esperar a que vuelva un «Invalid password» que no
+ * dice nada.
+ *
+ * Lo usan la pantalla de acceso y «Cambiar contraseña» de Mi cuenta, para que
+ * las dos no puedan separarse. El prototipo dice seis y está desfasado.
+ *
+ * Existe la misma constante en `convex/cuenta.ts`, que es la que manda: si
+ * cambias una, cambia la otra.
+ */
+export const MINIMO_CONTRASENA = 8;

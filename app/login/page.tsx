@@ -9,6 +9,7 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { Logo } from "@/components/shell/AppShell";
+import { MINIMO_CONTRASENA } from "@/lib/constants";
 import { esEmailValido } from "@/lib/format";
 
 /**
@@ -105,12 +106,13 @@ export default function LoginPage({
     intentado && !/^\d{8}$/.test(codigo.trim())
       ? "El código son 8 dígitos"
       : null;
-  // 8 caracteres es lo que exige `validateDefaultPasswordRequirements`
-  // (`providers/Password.js:171-175`). Se comprueba aquí para que no llegue de
-  // vuelta como un "Invalid password" que no dice nada.
+  // El mínimo lo exige `validateDefaultPasswordRequirements` de la librería. Se
+  // comprueba aquí para que no llegue de vuelta como un "Invalid password" que
+  // no dice nada. La constante se comparte con «Cambiar contraseña» de Mi
+  // cuenta, para que las dos pantallas no puedan separarse.
   const errorPasswordNueva =
-    intentado && passwordNueva.length < 8
-      ? "La contraseña necesita al menos 8 caracteres"
+    intentado && passwordNueva.length < MINIMO_CONTRASENA
+      ? `La contraseña necesita al menos ${MINIMO_CONTRASENA} caracteres`
       : null;
 
   /**
