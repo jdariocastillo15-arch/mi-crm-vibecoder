@@ -180,9 +180,18 @@ export default defineSchema({
    * `implementation/mutations/retrieveAccountWithCredentials.js:25` la
    * comprobación vive dentro de un `if (account.secret !== undefined)`, y el
    * flujo "reset" no lleva secret: sin esta tabla, pedir códigos sería gratis
-   * e ilimitado. Peor aún, cada petición borra el código anterior
-   * (`createVerificationCode.js:45-50`), así que repetirla también sirve para
-   * invalidar el código que alguien acaba de recibir.
+   * e ilimitado.
+   *
+   * Y es una RESERVA, no un registro de lo enviado. La diferencia importa y
+   * este comentario decía lo contrario: afirmaba que la tabla también impedía
+   * invalidar el código de otra persona, y con el cupo aplicado en el envío no
+   * lo impedía. Cada petición borra el código anterior
+   * (`createVerificationCode.js:45-50`) y eso pasa ANTES del envío
+   * (`implementation/signIn.js:62` frente a `:79`), así que mirar el cupo al
+   * enviar llegaba tarde: el código de la otra persona ya estaba borrado.
+   * Se reserva ahora en `auth.ts`, en el envoltorio de `authorize`, antes de
+   * que se genere nada; y si el correo no llega a salir, esa reserva se
+   * devuelve. Ver `recuperar.ts#reservarEnvio` y `#liberarReserva`.
    *
    * El email se guarda YA NORMALIZADO. Es lo que hace que el límite sea por
    * cuenta y no por variante escrita.

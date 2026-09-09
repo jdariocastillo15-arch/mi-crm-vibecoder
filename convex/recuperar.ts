@@ -61,17 +61,34 @@ function generaCodigo(): string {
 }
 
 /**
- * Apunta un envío y dice si se puede mandar.
+ * RESERVA un envío y dice si se puede mandar.
  *
  * Existe porque el límite de Convex Auth NO cubre esta fase. En
  * `implementation/mutations/retrieveAccountWithCredentials.js:25` la
  * comprobación está dentro de un `if (account.secret !== undefined)`, y el
  * flujo "reset" no lleva secret: sin esto, pedir códigos sería gratis.
  *
+ * SE RESERVA ANTES DE ENVIAR, Y ESO ES EL PUNTO. Antes esto se llamaba
+ * `registrarEnvio` y corría dentro de `sendVerificationRequest`, o sea DESPUÉS
+ * de que la librería hubiera generado el código nuevo y borrado el anterior
+ * (`implementation/signIn.js:62` genera, `:79` envía; el borrado está en
+ * `mutations/createVerificationCode.js:47`). El cupo protegía el buzón, no el
+ * código: cualquiera, sin sesión, podía pedir códigos en bucle para el correo
+ * de otra persona y dejarle el suyo invalidado una y otra vez. Quien reservó
+ * es `auth.ts`, en el envoltorio de `authorize`, que corre antes que nada de
+ * eso. Ver el comentario de `limitesRecuperacion` en `schema.ts`.
+ *
+ * Es una `mutation`, así que la lectura y el incremento son una sola
+ * transacción: dos peticiones simultáneas no pueden ver el mismo hueco libre.
+ * Por eso se reserva de verdad en vez de apuntar el envío al terminar.
+ *
  * El email llega ya normalizado, así que el cupo es POR CUENTA y no por forma
  * de escribirla.
+ *
+ * Devuelve la `ventanaInicio` con la que se contó para que quien reservó pueda
+ * devolver EXACTAMENTE su reserva si el envío falla, y ninguna otra.
  */
-export const registrarEnvio = internalMutation({
+export const reservarEnvio = internalMutation({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
     const ahora = Date.now();
@@ -86,21 +103,52 @@ export const registrarEnvio = internalMutation({
         enviados: 1,
         ventanaInicio: ahora,
       });
-      return { permitido: true };
+      return { permitido: true, ventanaInicio: ahora };
     }
 
     // Ventana caducada: se reinicia la cuenta en vez de acumular para siempre.
     if (ahora - previo.ventanaInicio >= VENTANA_MS) {
       await ctx.db.patch(previo._id, { enviados: 1, ventanaInicio: ahora });
-      return { permitido: true };
+      return { permitido: true, ventanaInicio: ahora };
     }
 
     if (previo.enviados >= MAXIMO_POR_VENTANA) {
-      return { permitido: false };
+      return { permitido: false, ventanaInicio: previo.ventanaInicio };
     }
 
     await ctx.db.patch(previo._id, { enviados: previo.enviados + 1 });
-    return { permitido: true };
+    return { permitido: true, ventanaInicio: previo.ventanaInicio };
+  },
+});
+
+/**
+ * Devuelve una reserva que no llegó a convertirse en correo.
+ *
+ * Sin esto, un fallo de Resend gastaba cupo igual: tres intentos con el
+ * proveedor caído dejaban a esa persona una hora sin poder entrar y sin haber
+ * recibido nada. Como el envío vive en una `action`, la reserva ya está
+ * confirmada cuando el `fetch` revienta y no se deshace sola.
+ *
+ * `ventanaInicio` es la que devolvió la reserva, y es lo que hace que esto
+ * devuelva SOLO la suya: si la ventana ya rotó —otra petición la reinició
+ * mientras tanto—, los contadores de ahora son de otra tanda y no se tocan.
+ * Y nunca se pone a cero nada: se resta uno, que es lo que se había sumado.
+ */
+export const liberarReserva = internalMutation({
+  args: { email: v.string(), ventanaInicio: v.number() },
+  handler: async (ctx, { email, ventanaInicio }) => {
+    const previo = await ctx.db
+      .query("limitesRecuperacion")
+      .withIndex("email", (q) => q.eq("email", email))
+      .unique();
+
+    if (previo === null) return null;
+    // Otra ventana: la reserva que se quiere devolver ya no está en esta cuenta.
+    if (previo.ventanaInicio !== ventanaInicio) return null;
+    if (previo.enviados <= 0) return null;
+
+    await ctx.db.patch(previo._id, { enviados: previo.enviados - 1 });
+    return null;
   },
 });
 
@@ -113,7 +161,34 @@ export const registrarEnvio = internalMutation({
  * `implementation/signIn.js:93-95`, "Figure out typing for email providers so
  * they can access ctx". De ahí el cast de más abajo.
  */
+/**
+ * Marca los errores que son DEL ENVÍO y no de otra cosa.
+ *
+ * `auth.ts` devuelve la reserva del cupo cuando el correo no sale, y necesita
+ * distinguir eso de cualquier otra excepción. La diferencia no es cosmética:
+ * para cuando algo falla, la librería YA ha borrado el código que la persona
+ * tenía y ha puesto otro (`implementation/signIn.js:62`). Devolver la reserva
+ * ante un error cualquiera regalaría intentos gratis a quien provoque uno a
+ * propósito después de esa línea, y el código ajeno se podría tirar en bucle
+ * sin gastar cupo. Solo se perdona lo que de verdad impidió que saliera el
+ * correo.
+ */
+export const FALLO_DE_ENVIO = "FALLO_DE_ENVIO";
+
 async function enviarCodigo(
+  params: { identifier: string; token: string; expires: Date },
+  ctx: GenericActionCtx<DataModel>,
+): Promise<void> {
+  try {
+    await mandarPorResend(params, ctx);
+  } catch (error) {
+    // Se reetiqueta sin perder el detalle, que hace falta en el log.
+    const detalle = error instanceof Error ? error.message : String(error);
+    throw new Error(`${FALLO_DE_ENVIO}: ${detalle}`);
+  }
+}
+
+async function mandarPorResend(
   params: { identifier: string; token: string; expires: Date },
   ctx: GenericActionCtx<DataModel>,
 ): Promise<void> {
@@ -123,15 +198,12 @@ async function enviarCodigo(
   // valor depende que el cupo sea uno por cuenta.
   const email = normalizaEmail(params.identifier);
 
-  const { permitido } = await ctx.runMutation(
-    internal.recuperar.registrarEnvio,
-    { email },
-  );
-
-  // Se agotó el cupo: no se manda nada y NO se lanza. Lanzar aquí le diría a
-  // quien esté probando correos que este existe y ya ha pedido códigos, que es
-  // justo lo que la pantalla se esfuerza en no revelar.
-  if (!permitido) return;
+  // AQUÍ YA NO SE MIRA EL CUPO, y es el arreglo entero. Cuando se miraba aquí
+  // llegaba tarde: la librería ya había generado el código nuevo y borrado el
+  // que la persona tenía en el buzón. La reserva la hace `auth.ts` en el
+  // envoltorio de `authorize`, antes de que exista código nuevo que sustituya
+  // al viejo. Si el envío de más abajo falla, esa misma reserva se devuelve
+  // allí, que es donde se sabe con qué ventana se contó.
 
   const clave = process.env.AUTH_RESEND_KEY;
   if (!clave) {
