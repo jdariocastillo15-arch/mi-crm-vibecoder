@@ -1,0 +1,118 @@
+# CodeRabbit — configuración de Vibe CRM.
+#
+# Esquema: https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+# Referencia: https://docs.coderabbit.ai/reference/configuration
+#
+# El listón de este repositorio es DELIBERADAMENTE alto: solo interesan los
+# hallazgos BLOQUEANTES y MAYORES. El estilo, los nombres y el formato ya los
+# cubren `eslint` y `tsc`, y la revisión humana pierde valor si hay que
+# atravesar veinte comentarios menores para llegar al que importa.
+#
+# Tres piezas hacen ese filtro, y las tres hacen falta:
+#   1. `reviews.profile: quiet`, que el propio esquema define como «solo la
+#      retroalimentación más importante». Por defecto era `chill`.
+#   2. `tone_instructions`, que dice en palabras qué cuenta como bloqueante.
+#   3. `path_instructions`, que baja esa definición a cada zona del código.
+
+language: es-ES
+
+# Este repositorio es PÚBLICO, y por defecto CodeRabbit mete los públicos por
+# el plan gratuito de código abierto, que no revisa automáticamente si el
+# repositorio no llega a 10 estrellas. Fue exactamente lo que pasó en el PR #10:
+# comentó solo para decir que se saltaba la revisión.
+#
+# Poniéndolo en `false`, el repositorio entra por el plan contratado
+# (Advanced, comprobado en el panel el 2026-09-09) y desaparece el umbral.
+#
+# OJO: si algún día se queda sin plan de pago, esta línea deja el repositorio
+# SIN revisión ninguna en vez de devolverlo al plan gratuito. Es la contrapartida
+# consciente de no depender de un contador de estrellas.
+enable_free_tier: false
+
+# Máximo 250 caracteres: es un límite del esquema, no una preferencia.
+tone_instructions: >-
+  Comenta solo defectos bloqueantes o mayores: seguridad, pérdida o corrupción
+  de datos, y errores de lógica con efecto real. Omite estilo, nombres, formato,
+  preferencias y microoptimizaciones. Si no hay ninguno, dilo en una línea.
+
+reviews:
+  # El interruptor principal del filtro de severidad.
+  profile: quiet
+
+  # --- Ruido decorativo: fuera ---
+  poem: false
+  in_progress_fortune: false
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  suggested_labels: false
+  suggested_reviewers: false
+  related_issues: false
+  related_prs: false
+
+  # --- Lo que sí se conserva del resumen ---
+  # El resumen y la lista de ficheros son contexto para quien revisa, no
+  # hallazgos, así que no compiten con la regla de severidad.
+  high_level_summary: true
+  changed_files_summary: true
+  review_status: true
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+
+  # Sugerencias de conveniencia. Ninguna es un bloqueante ni un mayor, así que
+  # por definición sobran aquí. `autofix`, `fix_ci` y `resolve_merge_conflict`
+  # se quedan como están: no generan comentarios de revisión.
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+
+  # Comprobaciones de PROCESO (título, descripción, cobertura de docstrings).
+  # No son severidad de código y por defecto salen como aviso en cada PR.
+  # `"off"` va entrecomillado a propósito: sin comillas, YAML 1.1 lo lee como
+  # el booleano `false`.
+  pre_merge_checks:
+    title:
+      mode: "off"
+    description:
+      mode: "off"
+    docstrings:
+      mode: "off"
+    issue_assessment:
+      mode: "off"
+
+  # Código generado o material de referencia: revisarlo es ruido garantizado.
+  path_filters:
+    - "!convex/_generated/**"
+    - "!package-lock.json"
+    - "!DESING/**"
+    - "!public/**"
+
+  # Qué cuenta como bloqueante o mayor en cada zona. Salen de la auditoría
+  # completa del 2026-09-08: son las clases de fallo que este sistema ya ha
+  # tenido, no una lista genérica.
+  path_instructions:
+    - path: "convex/**/*.ts"
+      instructions: >-
+        Servidor. Señala únicamente lo bloqueante o mayor: una función de
+        negocio sin guarda de autorización o sin comprobar la baja lógica
+        (`bajaEn`); trabajo que necesita atomicidad puesto en una `action`, que
+        no revierte, en vez de en una `mutation`; validación que se aplica en el
+        orden equivocado y deja pasar un valor que el esquema prohíbe; entrada
+        sin validar que llega a la base de datos; consultas que recorren la
+        tabla entera pudiendo usar `withIndex`; y mensajes de error que revelan
+        hacia fuera si una cuenta existe. No comentes estilo ni nombres.
+    - path: "{app,components}/**/*.{ts,tsx}"
+      instructions: >-
+        Cliente. Señala únicamente lo bloqueante o mayor: errores de Convex sin
+        tratar que dejan la pantalla rota o mienten sobre los permisos; datos
+        que se transforman mal antes de enviarse al servidor, en especial
+        importes y fechas; controles interactivos sin nombre accesible, sin
+        anillo de foco visible o inalcanzables con teclado; y contraste por
+        debajo de AA. No comentes estilo, orden de props ni preferencias de
+        formato.
