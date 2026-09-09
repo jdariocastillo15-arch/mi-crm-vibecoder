@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import {
   getAuthSessionId,
   getAuthUserId,
@@ -46,44 +46,70 @@ import {
  */
 export const MINIMO_CONTRASENA = 8;
 
-/** El mismo texto para todo lo que sea «tu sesión no vale». */
-const SIN_SESION = "No hay sesión iniciada";
+/**
+ * Los motivos por los que este cambio se rechaza, como CÓDIGO y no como frase.
+ *
+ * POR QUÉ CÓDIGOS Y NO MENSAJES. Un `throw new Error("texto")` **pierde su
+ * texto en producción**: Convex no revela a los clientes nada de los errores no
+ * controlados, y llega un escueto `Server Error`. Está en su documentación de
+ * errores de aplicación. La primera versión de este fichero lanzaba prosa y la
+ * pantalla la reconocía comparando cadenas, así que en producción no habría
+ * distinguido una contraseña equivocada de un bloqueo por intentos: las dos
+ * habrían caído en el mismo aviso genérico. Lo encontró auditoría.
+ *
+ * `ConvexError` es la excepción a esa regla: su `data` **sí** viaja al cliente
+ * en producción. Por eso el motivo va ahí, y el texto lo pone la pantalla.
+ *
+ * El repositorio ya esquivaba el problema en el login (`login/page.tsx:201`),
+ * que ignora el mensaje del servidor y fija el suyo. Aquí no basta con eso
+ * porque hay que distinguir dos casos, y de ahí el código.
+ *
+ * Existe la lista equivalente en `OverlayCambiarContrasena.tsx`. No se comparte
+ * un módulo a propósito: importar desde `convex/` arrastraría al navegador todo
+ * el servidor. Un código que la pantalla no reconozca cae en su mensaje
+ * genérico, así que separarlas degrada bien.
+ */
+type MotivoDelRechazo =
+  | "sin_sesion"
+  | "sin_contrasena"
+  | "sin_correo"
+  | "actual_vacia"
+  | "muy_corta"
+  | "actual_incorrecta"
+  | "demasiados_intentos"
+  | "cuenta_ajena";
+
+function rechaza(motivo: MotivoDelRechazo): never {
+  throw new ConvexError({ motivo });
+}
 
 /**
- * Traduce los códigos crudos de la librería.
+ * Traduce a motivo los códigos crudos que lanza la librería.
  *
- * `retrieveAccount` lanza `new Error(codigo)` con la cadena tal cual
- * (`implementation/index.js:373-379`). Aquí SÍ se puede ser preciso, al revés
- * que en `auth.ts`: quien llama ya tiene sesión, así que distinguir los casos no
- * revela qué correos existen. Lo que no se puede es soltar «InvalidSecret» a la
- * cara de nadie.
+ * `retrieveAccount` hace `throw new Error(codigo)` con la cadena tal cual
+ * (`implementation/index.js:373-379`), así que aquí sí hay que mirar el texto:
+ * es lo único que da. Lo que sale de esta función ya es un código nuestro.
  */
-function traduceErrorDeCredencial(error: unknown): string {
-  const codigo = error instanceof Error ? error.message : String(error);
+function motivoDeCredencial(error: unknown): MotivoDelRechazo {
+  const crudo = error instanceof Error ? error.message : String(error);
 
-  if (codigo.includes("InvalidSecret")) {
-    return "La contraseña actual no es correcta";
-  }
+  if (crudo.includes("InvalidSecret")) return "actual_incorrecta";
 
   // El contador es el MISMO que bloquea el login
   // (`retrieveAccountWithCredentials.js:26-33`), y eso es deseable: impide usar
   // esta pantalla como un oráculo ilimitado de contraseñas con una sesión
   // robada. El precio es que fallar aquí también cierra el login un rato.
-  //
-  // No se promete una duración. `rateLimit.js#getRateLimitState` repone
-  // intentos de forma continua, a razón de diez por hora, así que a los pocos
-  // minutos vuelve a haber alguno: decir «una hora» sería mentir.
-  if (codigo.includes("TooManyFailedAttempts")) {
-    return "Demasiados intentos fallidos. Espera unos minutos y vuelve a intentarlo";
-  }
+  if (crudo.includes("TooManyFailedAttempts")) return "demasiados_intentos";
 
   // No debería llegar: la pantalla esconde la opción y esta acción la vuelve a
-  // comprobar antes de llamar. Si llega, es un fallo de verdad y se dice.
-  if (codigo.includes("InvalidAccountId")) {
-    return "Esta cuenta no tiene ninguna contraseña que cambiar";
-  }
+  // comprobar antes de llamar.
+  if (crudo.includes("InvalidAccountId")) return "sin_contrasena";
 
-  return "No se ha podido cambiar la contraseña";
+  // Cualquier otra cosa —un fallo de la librería, de la red o de la query
+  // interna— NO se disfraza de motivo conocido. Se deja subir tal cual para que
+  // la pantalla la trate con su mensaje genérico, que es lo que pidió
+  // auditoría.
+  throw error;
 }
 
 /**
@@ -129,7 +155,7 @@ export const cambiarContrasena = action({
     const usuarioDelToken = await getAuthUserId(ctx);
     const sesionActual = await getAuthSessionId(ctx);
     if (usuarioDelToken === null || sesionActual === null) {
-      throw new Error(SIN_SESION);
+      rechaza("sin_sesion");
     }
 
     const quien = await ctx.runQuery(internal.cuenta.datosParaCambio, {});
@@ -137,26 +163,19 @@ export const cambiarContrasena = action({
     // El token dice una cosa y la base otra: no se sigue adelante. No debería
     // pasar —las dos salen de la misma sesión— pero esta acción escribe una
     // credencial, y ahí no se avanza con una identidad que no cuadra.
-    if (quien.usuarioId !== usuarioDelToken) throw new Error(SIN_SESION);
+    if (quien.usuarioId !== usuarioDelToken) rechaza("sin_sesion");
 
-    if (!quien.tieneContrasena) {
-      throw new Error("Todavía no has establecido una contraseña");
-    }
-    if (quien.email.length === 0) {
-      throw new Error("Esta cuenta no tiene ningún correo asociado");
-    }
+    if (!quien.tieneContrasena) rechaza("sin_contrasena");
+    if (quien.email.length === 0) rechaza("sin_correo");
 
     // La actual es OBLIGATORIA en el servidor. Sin esta línea, una sesión
     // robada cambiaría la contraseña sin conocer la anterior, que es justo lo
     // que impide que el robo se vuelva permanente.
-    if (actual.length === 0) {
-      throw new Error("Introduce tu contraseña actual");
-    }
-    if (nueva.length < MINIMO_CONTRASENA) {
-      throw new Error(
-        `La contraseña necesita al menos ${MINIMO_CONTRASENA} caracteres`,
-      );
-    }
+    //
+    // Se mira la longitud SIN recortar espacios: una contraseña puede ser
+    // espacios, y normalizar una credencial para validarla es cambiarla.
+    if (actual.length === 0) rechaza("actual_vacia");
+    if (nueva.length < MINIMO_CONTRASENA) rechaza("muy_corta");
 
     // Comprobar la actual. Lanza con el código crudo si no cuadra, y de paso
     // apunta el intento fallido en el mismo contador que frena el login.
@@ -168,7 +187,7 @@ export const cambiarContrasena = action({
       });
       cuenta = encontrada.account;
     } catch (error) {
-      throw new Error(traduceErrorDeCredencial(error));
+      rechaza(motivoDeCredencial(error));
     }
 
     // La cuenta se busca por CORREO, no por usuario, así que hay que confirmar
@@ -176,7 +195,7 @@ export const cambiarContrasena = action({
     // misma comprobación en el flujo de recuperación
     // (`providers/Password.js:117`). Sin ella, un desajuste entre `users.email`
     // y `providerAccountId` dejaría reescribir la credencial de otra persona.
-    if (cuenta.userId !== usuarioDelToken) throw new Error(SIN_SESION);
+    if (cuenta.userId !== usuarioDelToken) rechaza("cuenta_ajena");
 
     await modifyAccountCredentials<DataModel>(ctx, {
       provider: PROVEEDOR_PASSWORD,

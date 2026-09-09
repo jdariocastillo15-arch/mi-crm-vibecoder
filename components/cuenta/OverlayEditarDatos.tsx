@@ -54,8 +54,14 @@ export function OverlayEditarDatos({
       await actualizar({ name: nombreLimpio });
       mostrar(AVISOS.datosActualizados);
       onCerrar();
-    } catch (e) {
-      mostrarError(e instanceof Error ? e.message : "No se ha podido guardar");
+    } catch {
+      // El texto lo pone el cliente, no el servidor. En producción Convex no
+      // revela el mensaje de un error no controlado y lo sustituye por
+      // «Server Error», así que enseñar `e.message` sería enseñar eso
+      // literalmente. Aquí no hacen falta códigos como en «Cambiar contraseña»:
+      // el nombre vacío ya se valida antes de llamar, así que un error del
+      // servidor solo aparece en una carrera y no hay nada que distinguir.
+      mostrarError("No se ha podido guardar");
     } finally {
       setGuardando(false);
     }
