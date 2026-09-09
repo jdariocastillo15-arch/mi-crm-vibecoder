@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { ChevronLeft, LogOut, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { api } from "@/convex/_generated/api";
 import { destinosPara, esPantallaCompleta } from "./nav";
+import { useSalirAlAcceso } from "./useSalirAlAcceso";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/IconButton";
 import { ROL } from "@/lib/constants";
@@ -25,7 +25,7 @@ import { cn } from "@/lib/cn";
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { signOut } = useAuthActions();
+  const salir = useSalirAlAcceso();
   const me = useQuery(api.users.me);
 
   const destinos = destinosPara(me?.rol);
@@ -92,21 +92,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
             </span>
           </Link>
-          {/* Espera a `signOut()` y DESPUÉS navega. Sin la navegación, la
-              sesión se limpia pero la URL se queda donde estaba —el middleware
-              solo actúa en la siguiente— y la pantalla se queda pidiendo datos
-              que ya no puede traer. Es JES-89, y aquí se cierra también para el
-              diálogo de "Mi cuenta". Sin `await` la navegación adelantaría al
-              borrado de los tokens y el middleware devolvería a /hoy. */}
+          {/* La salida la comparten las tres puertas de la aplicación, con
+              `useSalirAlAcceso`: ahí está por qué hay que esperar a `signOut()`
+              antes de navegar y qué pasa si no se hace. */}
           <IconButton
             aria-label="Cerrar sesión"
             size="compact"
-            onClick={() => {
-              void (async () => {
-                await signOut();
-                router.replace("/login");
-              })();
-            }}
+            onClick={() => void salir()}
           >
             <LogOut size={20} strokeWidth={1.5} aria-hidden />
           </IconButton>

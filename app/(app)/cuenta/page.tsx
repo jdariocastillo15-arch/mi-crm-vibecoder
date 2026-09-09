@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useQuery } from "convex/react";
 import { ChevronRight, Lock, LogOut, Pencil } from "lucide-react";
 import type { ReactNode } from "react";
@@ -12,6 +11,7 @@ import { Card } from "@/components/ui/Card";
 import { OverlayEditarDatos } from "@/components/cuenta/OverlayEditarDatos";
 import { OverlayCambiarContrasena } from "@/components/cuenta/OverlayCambiarContrasena";
 import { DialogoCerrarSesion } from "@/components/cuenta/DialogoCerrarSesion";
+import { useSalirAlAcceso } from "@/components/shell/useSalirAlAcceso";
 import { ROL } from "@/lib/constants";
 
 /**
@@ -204,10 +204,23 @@ function CuentaCargando() {
 /**
  * La sesión se ha ido mientras esta pantalla estaba abierta — por ejemplo
  * porque han dado de baja a esa persona, o porque cambió su contraseña en otro
- * dispositivo. El middleware redirige en la siguiente navegación, no ahora, así
- * que aquí hace falta una salida y no una pantalla en blanco.
+ * dispositivo.
+ *
+ * LA SALIDA ES UN BOTÓN, NO UN ENLACE, y no es una preferencia de estilo.
+ *
+ * Un enlace a `/login` no llegaba a `/login`. El middleware pregunta por
+ * `auth:isAuthenticated`, que valida el JWT y no mira `authSessions`, así que
+ * con la sesión ya revocada pero el JWT todavía vivo daba por autenticado al
+ * navegador y devolvía a `/hoy`. Reproducido en desarrollo: no rebotaba sin
+ * más, reventaba con «No hay sesión iniciada» y sin nada que lo recogiera. Lo
+ * encontró auditoría.
+ *
+ * Ahora cierra sesión de verdad antes de navegar, con el mismo `useSalirAlAcceso`
+ * que usan las otras dos salidas.
  */
 function SinSesion() {
+  const salir = useSalirAlAcceso();
+
   return (
     <Card>
       <div className="flex flex-col items-center gap-2 px-3 py-6 text-center">
@@ -218,12 +231,13 @@ function SinSesion() {
         <p className="max-w-[280px] text-[13px] text-text-muted">
           Vuelve a entrar para seguir usando el CRM.
         </p>
-        <Link
-          href="/login"
+        <button
+          type="button"
+          onClick={() => void salir()}
           className="mt-2 inline-flex h-11 items-center rounded-md border border-border-strong bg-surface px-5 text-[15px] font-medium text-text transition-colors hover:bg-surface-2"
         >
           Ir al acceso
-        </Link>
+        </button>
       </div>
     </Card>
   );
