@@ -55,6 +55,11 @@
   --color-text: #1a1d21;
   --color-text-muted: #656c75;
   --color-text-subtle: #868d96;
+  /* Acento morado. Hoy lo usa un solo sitio —la fecha de la pantalla «Hoy»—
+     pero va como token igualmente: en este proyecto ningún componente escribe
+     un color a mano. Elegido para cumplir AA en texto pequeño: 5,36:1 sobre el
+     fondo claro, frente a los 3,15:1 del gris que había, que NO lo cumplía. */
+  --color-accent: #7c3aed;
   --color-focus: #16a34a;
   /* Velo de los overlays. Es un color, así que es un token: los componentes no
      escriben rgba() a pelo ni siquiera para esto. */
@@ -166,6 +171,8 @@
   --color-text: #ecedee;
   --color-text-muted: #9ba1a8;
   --color-text-subtle: #71777e;
+  /* El mismo acento, aclarado para el fondo oscuro: 7,05:1. */
+  --color-accent: #a78bfa;
   --color-focus: #4ade80;
   --color-scrim: rgba(0, 0, 0, 0.6);
 
