@@ -203,5 +203,9 @@ export default defineSchema({
     enviados: v.number(),
     /** Milisegundos desde epoch. Cuando la ventana caduca, se reinicia. */
     ventanaInicio: v.number(),
-  }).index("email", ["email"]),
+  })
+    .index("email", ["email"])
+    /** Para que la limpieza de `recuperar.ts#limpiarCaducados` encuentre las
+     *  vencidas sin recorrer la tabla entera. */
+    .index("ventanaInicio", ["ventanaInicio"]),
 });
