@@ -1,7 +1,12 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { estadoVenta } from "./schema";
-import { requireUser, assertClienteExiste, hoy } from "./helpers";
+import {
+  requireUser,
+  assertClienteExiste,
+  esFechaValida,
+  hoy,
+} from "./helpers";
 
 /** Ventas y oportunidades — implementa JES-65, JES-66 y JES-67. */
 
@@ -89,8 +94,28 @@ export const crear = mutation({
 
     const concepto = args.concepto.trim();
     if (concepto.length === 0) throw new Error("Indica qué se vende");
-    if (!Number.isFinite(args.importe) || args.importe <= 0) {
-      throw new Error("Indica un importe válido");
+    // ENTERO, y se guarda el que llegó. Antes esto era `Number.isFinite` y un
+    // `Math.round` al insertar, y esa pareja tenía dos agujeros: un 0,4 pasaba
+    // el «mayor que cero» y se guardaba como 0, y un 49,9 se guardaba como 50
+    // sin decírselo a nadie. El campo son euros enteros —no hay dónde meter los
+    // céntimos—, así que lo honesto es rechazar la fracción, no maquillarla.
+    //
+    // `Number.isInteger` ya descarta NaN e infinitos, así que sustituye a la
+    // comprobación de finitud en vez de sumarse a ella.
+    if (!Number.isInteger(args.importe) || args.importe <= 0) {
+      throw new Error("Indica un importe válido en euros enteros");
+    }
+
+    // La fecha se comprueba AQUÍ, no solo en el overlay. Esta mutación es API
+    // pública y hasta ahora la única garantía estaba en el navegador, que es
+    // como no tener ninguna. `seguimientos.crear` ya lo hacía bien.
+    //
+    // Y sin futuro: no se vendió nada mañana. Una operación que todavía no ha
+    // pasado se registra con estado «abierta», que es justo para lo que está.
+    const fecha = args.fecha ?? hoy();
+    if (!esFechaValida(fecha)) throw new Error("Indica una fecha válida");
+    if (fecha > hoy()) {
+      throw new Error("No se puede registrar una fecha futura");
     }
 
     // Ojo: registrar una venta NO toca la fecha de último contacto.
@@ -98,9 +123,9 @@ export const crear = mutation({
     return await ctx.db.insert("ventas", {
       clienteId: args.clienteId,
       concepto,
-      importe: Math.round(args.importe),
+      importe: args.importe,
       estado: args.estado,
-      fecha: args.fecha ?? hoy(),
+      fecha,
       autorId: user._id,
     });
   },

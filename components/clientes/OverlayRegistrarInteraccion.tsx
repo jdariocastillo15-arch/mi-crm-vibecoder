@@ -57,10 +57,15 @@ export function OverlayRegistrarInteraccion({
   const errorTexto = !nota ? "Escribe qué pasó" : null;
   // Solo puede faltar cuando se pregunta por él.
   const errorCliente = !sabemosElCliente && !elegido ? "Selecciona un cliente" : null;
+  // El `max` del campo NO basta: `Overlay` no monta un `<form>` y su botón
+  // llama a `guardar` directo, así que la validez nativa no frena nada. Una
+  // fecha futura escrita a mano llegaría a la mutación, que la rechaza, pero
+  // con un mensaje genérico. Aquí se dice qué pasa y dónde.
+  const errorFecha = fecha > hoy() ? "No puede ser una fecha futura" : null;
 
   async function guardar() {
     setIntentado(true);
-    if (errorTexto || errorCliente) return;
+    if (errorTexto || errorCliente || errorFecha) return;
 
     setGuardando(true);
     try {
@@ -74,6 +79,9 @@ export function OverlayRegistrarInteraccion({
         // `args.fecha ?? hoy()`, y un `""` no cae en ese `??`: se guardaría una
         // interacción sin fecha, que además rompería la comparación con la que
         // se adelanta el último contacto. O una fecha válida, o nada.
+        //
+        // El servidor vuelve a comprobarla, formato y futuro. Esto ya no es la
+        // garantía, solo el atajo para no ir y volver.
         fecha: esFechaValida(fecha) ? fecha : undefined,
       });
       mostrar(AVISOS.interaccionRegistrada);
@@ -126,6 +134,8 @@ export function OverlayRegistrarInteraccion({
         type="date"
         value={fecha}
         onChange={(e) => setFecha(e.target.value)}
+        max={hoy()}
+        error={intentado ? errorFecha : null}
         icon={<Calendar size={16} strokeWidth={1.5} />}
       />
 

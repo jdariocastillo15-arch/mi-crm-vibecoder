@@ -51,6 +51,27 @@ function euros(texto: string): number {
   return parseInt(texto.replace(/[^0-9]/g, ""), 10);
 }
 
+/**
+ * ¿Lo escrito lleva céntimos?
+ *
+ * El campo son EUROS ENTEROS: `ventas.importe` no tiene dónde guardar los
+ * céntimos. Y como `euros()` borra todo lo que no sea dígito, sin esto
+ * «1.200,50» se convertía en ciento veinte mil cincuenta euros, en silencio.
+ *
+ * Se mira DESPUÉS de quitar la decoración y ANTES de quitar los separadores, y
+ * ese orden es el arreglo. La primera versión buscaba la fracción al final de
+ * lo tecleado tal cual, así que el símbolo del euro o un espacio de más la
+ * escondían y el factor cien volvía por la puerta de atrás —justo los espacios
+ * y el «€» que `euros()` admite a propósito—. Lo encontró auditoría.
+ *
+ * Uno o dos dígitos tras el separador son céntimos; tres son el separador de
+ * millares. Así «1.200» y «1200» siguen siendo mil doscientos, y «1.200,50 €»
+ * y «49,9» avisan.
+ */
+function llevaCentimos(texto: string): boolean {
+  return /[.,]\d{1,2}$/.test(texto.replace(/[^0-9.,]/g, ""));
+}
+
 export function OverlayRegistrarVenta({
   abierto,
   onCerrar,
@@ -82,13 +103,25 @@ export function OverlayRegistrarVenta({
   // como en el diseño: quien deja el formulario vacío tiene que ver todo lo que
   // le falta de una sola vez, no de uno en uno.
   const errorConcepto = !queSeVende ? "Indica qué se vende" : null;
-  // `NaN > 0` es falso, así que el campo vacío cae aquí sin comprobarlo aparte.
-  const errorImporte = !(cantidad > 0) ? "Indica un importe válido" : null;
+  // Los céntimos van PRIMERO: quien escribe «1.200,50» no se ha equivocado de
+  // número, se ha equivocado de unidad, y decirle «importe válido» no le
+  // explicaría nada. `NaN > 0` es falso, así que el campo vacío cae en el
+  // segundo sin comprobarlo aparte.
+  const errorImporte = llevaCentimos(importe)
+    ? "Los importes van en euros enteros, sin céntimos"
+    : !(cantidad > 0)
+      ? "Indica un importe válido"
+      : null;
   const errorCliente = !sabemosElCliente && !elegido ? "Selecciona un cliente" : null;
+  // El `max` del campo NO basta: `Overlay` no monta un `<form>` y su botón
+  // llama a `guardar` directo, así que la validez nativa no frena nada. Una
+  // fecha futura escrita a mano llegaría a la mutación, que la rechaza, pero
+  // con un mensaje genérico. Aquí se dice qué pasa y dónde.
+  const errorFecha = fecha > hoy() ? "No puede ser una fecha futura" : null;
 
   async function guardar() {
     setIntentado(true);
-    if (errorConcepto || errorImporte || errorCliente) return;
+    if (errorConcepto || errorImporte || errorCliente || errorFecha) return;
 
     setGuardando(true);
     try {
@@ -102,8 +135,9 @@ export function OverlayRegistrarVenta({
         // Nunca se manda cadena vacía. `ventas.crear` hace `args.fecha ?? hoy()`
         // y un `""` NO cae en ese `??`: se guardaría una venta sin fecha, que
         // luego rompería el orden del historial. O una fecha válida, o nada.
-        // El servidor no comprueba este argumento, así que la garantía es de
-        // aquí — igual que en "Registrar interacción" (JES-62).
+        //
+        // El servidor vuelve a comprobarla, formato y futuro. Esto ya no es la
+        // garantía, solo el atajo para no ir y volver.
         fecha: esFechaValida(fecha) ? fecha : undefined,
       });
       mostrar(AVISOS.ventaRegistrada);
@@ -177,6 +211,8 @@ export function OverlayRegistrarVenta({
         type="date"
         value={fecha}
         onChange={(e) => setFecha(e.target.value)}
+        max={hoy()}
+        error={intentado ? errorFecha : null}
         icon={<Calendar size={16} strokeWidth={1.5} />}
       />
     </Overlay>

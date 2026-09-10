@@ -4,7 +4,7 @@ import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import type { EmailConfig } from "@convex-dev/auth/server";
-import { normalizaEmail } from "./helpers";
+import { esEmailValido, normalizaEmail } from "./helpers";
 
 /**
  * Recuperar la contraseña con un código enviado por correo — implementa JES-87.
@@ -27,6 +27,12 @@ const CADUCIDAD_SEGUNDOS = 15 * 60;
 /** Cuántos códigos se le mandan a un correo por ventana, y de cuánto es. */
 const MAXIMO_POR_VENTANA = 3;
 const VENTANA_MS = 60 * 60 * 1000;
+
+/**
+ * Cuántas filas caducadas borra la limpieza de una pasada. Ver
+ * `limpiarCaducados`.
+ */
+const MAXIMO_POR_PASADA = 500;
 
 const DIGITOS = 8;
 
@@ -92,6 +98,20 @@ export const reservarEnvio = internalMutation({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
     const ahora = Date.now();
+
+    // Lo que ni siquiera tiene forma de correo NO llega a escribir una fila.
+    // Sin esto, esta mutación —a la que se llega sin sesión, desde la pantalla
+    // de acceso— dejaba que cualquiera metiera filas en la tabla mandando
+    // textos inventados, y nada las borraba nunca.
+    //
+    // Filtrar por FORMATO no delata a nadie: es lo mismo que cualquiera puede
+    // comprobar en su navegador sin preguntarle al servidor. Lo que sigue sin
+    // comprobarse, y a propósito, es si ese correo pertenece a alguien: eso sí
+    // diría quién tiene cuenta aquí.
+    if (!esEmailValido(email)) {
+      return { permitido: false, ventanaInicio: ahora };
+    }
+
     const previo = await ctx.db
       .query("limitesRecuperacion")
       .withIndex("email", (q) => q.eq("email", email))
@@ -149,6 +169,48 @@ export const liberarReserva = internalMutation({
 
     await ctx.db.patch(previo._id, { enviados: previo.enviados - 1 });
     return null;
+  },
+});
+
+/**
+ * Borra las reservas cuya ventana ya venció. La llama `crons.ts`.
+ *
+ * Existe porque nada vaciaba esta tabla: `reservarEnvio` inserta una fila por
+ * cada correo distinto y no había ningún borrado en todo el proyecto. Las filas
+ * de quien pidió un código una vez y no volvió se quedaban para siempre.
+ *
+ * NO PUEDE CAMBIAR NINGUNA DECISIÓN DEL LIMITADOR, y eso es lo que la hace
+ * segura. `reservarEnvio` ya trata una ventana vencida reiniciando el contador
+ * a uno (`ahora - previo.ventanaInicio >= VENTANA_MS`), así que encontrar la
+ * fila borrada e insertarla de cero da exactamente el mismo resultado. Solo se
+ * tocan filas que ya no cuentan para nada.
+ *
+ * Y tampoco descuadra una devolución que llegue tarde: `liberarReserva` compara
+ * `ventanaInicio` antes de restar, así que si la fila se borró y se creó otra,
+ * la reserva vieja no encaja con la ventana nueva y no le quita cupo.
+ *
+ * EL LOTE ESTÁ ACOTADO a propósito, porque una mutación es una transacción y no
+ * puede crecer sin límite. Si el lote vuelve lleno quedan más, y en vez de
+ * esperar seis horas a la pasada siguiente se encadena otra inmediatamente: el
+ * trabajo por transacción sigue siendo el mismo y el excedente se drena solo.
+ */
+export const limpiarCaducados = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const limite = Date.now() - VENTANA_MS;
+
+    const caducadas = await ctx.db
+      .query("limitesRecuperacion")
+      .withIndex("ventanaInicio", (q) => q.lt("ventanaInicio", limite))
+      .take(MAXIMO_POR_PASADA);
+
+    for (const fila of caducadas) await ctx.db.delete(fila._id);
+
+    if (caducadas.length === MAXIMO_POR_PASADA) {
+      await ctx.scheduler.runAfter(0, internal.recuperar.limpiarCaducados, {});
+    }
+
+    return { borradas: caducadas.length };
   },
 });
 

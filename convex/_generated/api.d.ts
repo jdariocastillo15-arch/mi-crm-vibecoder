@@ -11,6 +11,7 @@
 import type * as acceso from "../acceso.js";
 import type * as auth from "../auth.js";
 import type * as clientes from "../clientes.js";
+import type * as crons from "../crons.js";
 import type * as cuenta from "../cuenta.js";
 import type * as equipo from "../equipo.js";
 import type * as helpers from "../helpers.js";
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   acceso: typeof acceso;
   auth: typeof auth;
   clientes: typeof clientes;
+  crons: typeof crons;
   cuenta: typeof cuenta;
   equipo: typeof equipo;
   helpers: typeof helpers;
