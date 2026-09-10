@@ -94,8 +94,16 @@ export const crear = mutation({
 
     const concepto = args.concepto.trim();
     if (concepto.length === 0) throw new Error("Indica qué se vende");
-    if (!Number.isFinite(args.importe) || args.importe <= 0) {
-      throw new Error("Indica un importe válido");
+    // ENTERO, y se guarda el que llegó. Antes esto era `Number.isFinite` y un
+    // `Math.round` al insertar, y esa pareja tenía dos agujeros: un 0,4 pasaba
+    // el «mayor que cero» y se guardaba como 0, y un 49,9 se guardaba como 50
+    // sin decírselo a nadie. El campo son euros enteros —no hay dónde meter los
+    // céntimos—, así que lo honesto es rechazar la fracción, no maquillarla.
+    //
+    // `Number.isInteger` ya descarta NaN e infinitos, así que sustituye a la
+    // comprobación de finitud en vez de sumarse a ella.
+    if (!Number.isInteger(args.importe) || args.importe <= 0) {
+      throw new Error("Indica un importe válido en euros enteros");
     }
 
     // La fecha se comprueba AQUÍ, no solo en el overlay. Esta mutación es API
@@ -115,7 +123,7 @@ export const crear = mutation({
     return await ctx.db.insert("ventas", {
       clienteId: args.clienteId,
       concepto,
-      importe: Math.round(args.importe),
+      importe: args.importe,
       estado: args.estado,
       fecha,
       autorId: user._id,
