@@ -174,7 +174,7 @@ export default function HoyPage() {
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-col gap-1.5">
-        <span className="text-xs font-semibold tracking-caps text-text-subtle uppercase">
+        <span className="text-xs font-semibold tracking-caps text-accent uppercase">
           {fechaLarga()}
         </span>
         {/* No es un encabezado: el <h1> de la pantalla es el "Hoy" de la barra
