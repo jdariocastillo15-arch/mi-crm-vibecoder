@@ -3,10 +3,16 @@
 > **Revisión 3.** Cierra M5 en el punto correcto, precisa la prueba de M6 y
 > **acota el plan**: S1+D6 salen como cambio independiente. No se amplía nada más.
 
-> **Estado a 2026-09-09.** La **tanda 1** está cerrada y mergeada: JES-94, PR #10,
-> merge `25b97ba`, desplegada en producción. Las tandas 2 a 6 siguen pendientes.
+> **Estado a 2026-09-10.** Cerradas la **tanda 1** (JES-94, PR #10, merge
+> `25b97ba`, en producción) y la **tanda 3, dinero** (JES-98, D1 y D2). Siguen
+> pendientes las tandas 2, 4, 5 y 6.
+>
 > Nota de numeración: durante la ejecución, «dinero» pasó a llamarse tanda 2 y el
 > resto del servidor tanda 3, al revés de como están numeradas aquí abajo.
+>
+> JES-98 cerró además dos cosas que este documento no había visto: la tabla
+> `limitesRecuperacion` crecía para siempre sin que nada la limpiara, y
+> `interacciones.crear` y `ventas.crear` no validaban la fecha en el servidor.
 
 ## Contexto
 
@@ -43,9 +49,9 @@ estados de carga impecables, `tsc` + `eslint` + `npm audit` limpios.
 
 | # | Sev | Dónde | Qué pasa |
 |---|---|---|---|
-| D1 | 🔴 | `OverlayRegistrarVenta.tsx:50-52` | **Factor 100 en dinero.** `euros()` quita todo lo que no sea dígito: «1.200,50» → **120.050 €**. El comentario contempla el punto de millar, no la coma decimal — y el campo es `type="tel"`, con coma en el teclado. |
-| D2 | 🔴 | `convex/ventas.ts:92-101` | **Valida antes de redondear.** `0.4` pasa `<= 0` y `Math.round` guarda **0**, violando `schema.ts:165`. Sin tope superior: dos ventas de `1e308` pintan **«€Infinity»**. |
-| D3 | 🔴 | `interacciones.ts:50,63`; `ventas.ts:103` | **`fecha` sin validar** en ambas, mientras `seguimientos.ts:131` sí lo hace. Solo la **interacción** toca `ultimoContacto`; la **venta no lo modifica** y su daño es de orden y presentación. No es irreversible: falta **vía de corrección desde la aplicación**. |
+| D1 | 🔴 | `OverlayRegistrarVenta.tsx:50-52` | **Factor 100 en dinero.** `euros()` quita todo lo que no sea dígito: «1.200,50» → **120.050 €**. El comentario contempla el punto de millar, no la coma decimal — y el campo es `type="tel"`, con coma en el teclado. **CERRADO en la tanda 3 (JES-98).** |
+| D2 | 🔴 | `convex/ventas.ts:92-101` | **Valida antes de redondear.** `0.4` pasa `<= 0` y `Math.round` guarda **0**, violando `schema.ts:165`. Sin tope superior: dos ventas de `1e308` pintan **«€Infinity»**. **CERRADO en la tanda 3 (JES-98)**, salvo el tope superior, que sigue pendiente. |
+| D3 | 🔴 | `interacciones.ts:50,63`; `ventas.ts:103` | **`fecha` sin validar** en ambas, mientras `seguimientos.ts:131` sí lo hace. Solo la **interacción** toca `ultimoContacto`; la **venta no lo modifica** y su daño es de orden y presentación. No es irreversible: falta **vía de corrección desde la aplicación**. **CERRADO en JES-98**: las dos rechazan ahora formato inválido y fecha futura. La vía de corrección sigue sin existir, pero ya no hace falta para este caso. |
 | D4 | 🟠 | `users.ts:145-154` + `seguimientos.ts:205` | **Un seguimiento cerrado por alguien a quien luego dan de baja no se puede reabrir nunca.** La baja solo reasigna los *sin hacer*; `deshacer` exige ser quien lo cerró, y esa persona ya no entra. Ni la propietaria puede. |
 | D5 | 🟡 | todas las mutations | **Ninguna cadena tiene límite de longitud.** Riesgo **acumulado**, no de un documento suelto: Convex limita documento a 1 MiB y lectura a 16 MiB. |
 | D6 | 🟡 | `recuperar.ts:126-171` | El cupo se consume **aunque el correo nunca salga**: se registra antes del `fetch`, en una `action`, sin revertir. Resend caído → una hora sin poder entrar sin haber recibido nada. **CERRADO en la tanda 1 (JES-94).** |
@@ -127,20 +133,42 @@ incorrecto cuando el daño ya ocurrió antes del fallo.**
    reabrirla, y `completadoPorId` **sigue siendo Ana hasta la reapertura**; tras
    ella se limpia conforme al contrato actual (`seguimientos.ts:212`).
 2. **S2** — corte por `bajaEn` en `auth.ts:418-420`, calcado del de `:386-388`.
-3. **D3** — validar `fecha` en `interacciones.ts:50` y `ventas.ts:103`.
-   **El límite de futuro se mantiene en el servidor.** Antes de plantear
-   saneamiento, **comprobar si hay registros ya afectados**.
+3. ~~**D3**~~ — **CERRADA en JES-98.** Las dos mutaciones validan formato y
+   rechazan fecha futura, y los dos overlays lo comprueban también en local
+   porque el `max` del campo no frena nada: `Overlay` no monta un `<form>`.
+   Comprobado antes de tocar nada que **no había registros afectados** en
+   desarrollo; queda pendiente mirarlo en producción desde el panel.
 4. **D5** — límites de longitud en toda cadena, con helper compartido.
 5. **D7** — reaplicar teléfono-o-email en `clientes.ts:88-99`.
 6. **S5** — mensaje genérico hacia fuera en `helpers.ts:173`, detalle al log.
 
-### Tanda 3 — Dinero
+### Tanda 3 — Dinero · CERRADA (JES-98)
 
-**D1 + D2 juntas**, un contrato: importes **enteros en euros**. `euros()` trata
-la coma decimal antes de quitar los no-dígitos; `ventas.crear` **redondea primero
-y valida después**, con la comprobación de finitud tras el redondeo y tope
-superior. *Resultado fijado:* «1.200,50» → **1.201**. Casos: `0,4` → rechazada
-(no 0), negativos, texto inválido.
+**D1 + D2 juntas**, un contrato: importes **enteros en euros**.
+
+**El resultado fijado aquí cambió, y esto ya no describe lo implementado.** Este
+plan decía «redondea primero y valida después» y daba «1.200,50» → **1.201**. El
+dueño descartó ese redondeo: guardar en silencio un importe distinto del tecleado
+deja a alguien descubriendo semanas después que su venta no es la suya. **Se
+rechaza la fracción y se avisa**, en el navegador y en la API.
+
+Lo implementado, en JES-98:
+
+- `llevaCentimos()` busca la fracción **después de quitar la decoración y antes
+  de quitar los separadores**. Ese orden importa: buscarla al final del texto tal
+  cual dejaba pasar «1.200,50 €» y el mismo texto con un espacio, justo lo que
+  `euros()` admite a propósito. Lo encontró auditoría (DAT-M1).
+- `ventas.crear` exige `Number.isInteger` y guarda el importe recibido sin
+  transformarlo. Redondear antes de validar seguía aceptando `49,9` y guardando
+  `50` (DAT-M2). `Number.isInteger` ya descarta `NaN` e infinitos, así que
+  sustituye a la comprobación de finitud.
+
+*Resultado real:* «1.200,50», «1.200,50 €» y «49,9» **avisan y no guardan**;
+«1200» y «1.200» siguen valiendo mil doscientos; `0,4`, `0,6` y `49,9` por API se
+rechazan.
+
+**El tope superior de importes NO entró** y sigue pendiente: dos ventas de `1e308`
+todavía pintan «€Infinity». Queda como deuda declarada.
 
 ### Tanda 4 — Robustez del cliente
 
