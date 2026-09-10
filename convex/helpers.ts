@@ -140,9 +140,46 @@ export async function assertClienteExiste(
 // camino nuevo que toque el email tiene que pasar por estas funciones.
 // ---------------------------------------------------------------------------
 
+/** El proveedor de credenciales de contraseña, tal como lo nombra la librería. */
+export const PROVEEDOR_PASSWORD = "password";
+
 /** Forma canónica de un email: sin espacios alrededor y en minúsculas. */
 export function normalizaEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+/**
+ * ¿Esta persona tiene una contraseña **suya**, elegida por ella?
+ *
+ * No basta con que exista la credencial. Una ficha provisionada también la
+ * tiene, creada por el servidor con un secreto aleatorio que no conoce nadie
+ * (`acceso.ts#secretoInservible`), para que el flujo de código de JES-87 tuviera
+ * a qué agarrarse. Mirar solo si la cuenta existe daría un falso positivo y le
+ * ofrecería «cambiar» una contraseña que nunca eligió.
+ *
+ * Es la misma regla que decide el segundo paso del login (`acceso.ts:118`), y
+ * está calcada a propósito: si un día se separan, el login y «Mi cuenta»
+ * dirían cosas distintas sobre la misma persona.
+ *
+ * OJO con lo que esto NO dice: no dice por qué puerta entra. Alguien sin
+ * contraseña puede entrar con Google o por código. Quien pinte un texto a
+ * partir de este booleano tiene que quedarse en «no ha establecido contraseña»
+ * y no inventarse el proveedor.
+ */
+export async function tieneContrasenaPropia(
+  ctx: QueryCtx | MutationCtx,
+  usuario: Doc<"users">,
+): Promise<boolean> {
+  if (usuario.contrasenaPendiente === true) return false;
+
+  const cuenta = await ctx.db
+    .query("authAccounts")
+    .withIndex("userIdAndProvider", (q) =>
+      q.eq("userId", usuario._id).eq("provider", PROVEEDOR_PASSWORD),
+    )
+    .unique();
+
+  return cuenta !== null;
 }
 
 /**
@@ -215,7 +252,7 @@ export async function asignarEmail(
   const cuentaPassword = await ctx.db
     .query("authAccounts")
     .withIndex("userIdAndProvider", (q) =>
-      q.eq("userId", usuarioId).eq("provider", "password"),
+      q.eq("userId", usuarioId).eq("provider", PROVEEDOR_PASSWORD),
     )
     .unique();
 

@@ -8,7 +8,12 @@ import {
   mutation,
 } from "./_generated/server";
 import type { DataModel } from "./_generated/dataModel";
-import { buscarUsuarioPorEmail, esEmailValido, normalizaEmail } from "./helpers";
+import {
+  buscarUsuarioPorEmail,
+  esEmailValido,
+  normalizaEmail,
+  PROVEEDOR_PASSWORD,
+} from "./helpers";
 
 /**
  * El primer paso del login — implementa JES-92.
@@ -26,9 +31,6 @@ import { buscarUsuarioPorEmail, esEmailValido, normalizaEmail } from "./helpers"
  * Que el correo desconocido responda igual que la ficha pendiente es el punto:
  * sin eso, esta pantalla sería un listado de quién usa el CRM.
  */
-
-/** El proveedor de credenciales de contraseña, tal como lo llama la librería. */
-const PROVEEDOR = "password";
 
 /**
  * Un secreto que no conoce nadie.
@@ -101,7 +103,7 @@ export const estadoAcceso = mutation({
     const cuenta = await ctx.db
       .query("authAccounts")
       .withIndex("providerAndAccountId", (q) =>
-        q.eq("provider", PROVEEDOR).eq("providerAccountId", email),
+        q.eq("provider", PROVEEDOR_PASSWORD).eq("providerAccountId", email),
       )
       .unique();
 
@@ -154,7 +156,7 @@ export const prepararYEnviar = internalAction({
     if (faltaCuenta) {
       try {
         await createAccount<DataModel>(ctx, {
-          provider: PROVEEDOR,
+          provider: PROVEEDOR_PASSWORD,
           account: { id: email, secret: secretoInservible() },
           // `altaDeServidor` es la marca que reconoce `auth.ts`: dice que esto
           // viene del servidor y no de un navegador. No se guarda en `users`,
@@ -182,7 +184,7 @@ export const prepararYEnviar = internalAction({
     // código, guarda su hash, aplica el cupo de tres por hora y manda el correo.
     // Aquí no se duplica nada de eso.
     await ctx.runAction(api.auth.signIn, {
-      provider: PROVEEDOR,
+      provider: PROVEEDOR_PASSWORD,
       params: { email, flow: "reset" },
     });
 
