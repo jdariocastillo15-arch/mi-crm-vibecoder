@@ -85,10 +85,15 @@ export function OverlayRegistrarVenta({
   // `NaN > 0` es falso, así que el campo vacío cae aquí sin comprobarlo aparte.
   const errorImporte = !(cantidad > 0) ? "Indica un importe válido" : null;
   const errorCliente = !sabemosElCliente && !elegido ? "Selecciona un cliente" : null;
+  // El `max` del campo NO basta: `Overlay` no monta un `<form>` y su botón
+  // llama a `guardar` directo, así que la validez nativa no frena nada. Una
+  // fecha futura escrita a mano llegaría a la mutación, que la rechaza, pero
+  // con un mensaje genérico. Aquí se dice qué pasa y dónde.
+  const errorFecha = fecha > hoy() ? "No puede ser una fecha futura" : null;
 
   async function guardar() {
     setIntentado(true);
-    if (errorConcepto || errorImporte || errorCliente) return;
+    if (errorConcepto || errorImporte || errorCliente || errorFecha) return;
 
     setGuardando(true);
     try {
@@ -102,8 +107,9 @@ export function OverlayRegistrarVenta({
         // Nunca se manda cadena vacía. `ventas.crear` hace `args.fecha ?? hoy()`
         // y un `""` NO cae en ese `??`: se guardaría una venta sin fecha, que
         // luego rompería el orden del historial. O una fecha válida, o nada.
-        // El servidor no comprueba este argumento, así que la garantía es de
-        // aquí — igual que en "Registrar interacción" (JES-62).
+        //
+        // El servidor vuelve a comprobarla, formato y futuro. Esto ya no es la
+        // garantía, solo el atajo para no ir y volver.
         fecha: esFechaValida(fecha) ? fecha : undefined,
       });
       mostrar(AVISOS.ventaRegistrada);
@@ -177,6 +183,8 @@ export function OverlayRegistrarVenta({
         type="date"
         value={fecha}
         onChange={(e) => setFecha(e.target.value)}
+        max={hoy()}
+        error={intentado ? errorFecha : null}
         icon={<Calendar size={16} strokeWidth={1.5} />}
       />
     </Overlay>

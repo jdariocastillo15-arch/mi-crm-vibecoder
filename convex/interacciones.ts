@@ -1,7 +1,12 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { canalInteraccion } from "./schema";
-import { requireUser, assertClienteExiste, hoy } from "./helpers";
+import {
+  requireUser,
+  assertClienteExiste,
+  esFechaValida,
+  hoy,
+} from "./helpers";
 
 /** Interacciones — implementa JES-62 y JES-63. */
 
@@ -48,6 +53,19 @@ export const crear = mutation({
     if (texto.length === 0) throw new Error("Escribe qué pasó");
 
     const fecha = args.fecha ?? hoy();
+
+    // La fecha se comprueba AQUÍ, no solo en el overlay. Esta mutación es API
+    // pública y hasta ahora la única garantía estaba en el navegador, que es
+    // como no tener ninguna. `seguimientos.crear` ya lo hacía bien.
+    //
+    // Y sin futuro: no se habló con nadie mañana. Importa más de lo que parece
+    // porque `ultimoContacto` SOLO AVANZA, y ni se puede editar una interacción
+    // ni hay pantalla que lo repare. Una fecha del año 9999 dejaría a ese
+    // cliente marcado como recién contactado para siempre.
+    if (!esFechaValida(fecha)) throw new Error("Indica una fecha válida");
+    if (fecha > hoy()) {
+      throw new Error("No se puede registrar una fecha futura");
+    }
 
     const id = await ctx.db.insert("interacciones", {
       clienteId: args.clienteId,
