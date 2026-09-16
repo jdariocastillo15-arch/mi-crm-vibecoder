@@ -33,3 +33,10 @@ TMP (TEMPORAL)/
 
 # Vale de autorización de push — nunca se versiona
 .claude/push-autorizado
+
+# Playwright — la sesión guardada lleva tokens y nunca se sube
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/e2e/.auth/

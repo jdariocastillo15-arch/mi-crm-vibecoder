@@ -134,6 +134,43 @@ Todo esto es provisional hasta
 [JES-69](https://linear.app/jesus-dario-castillo-betacourt/issue/JES-69/overlay-anadir-usuario-editar-usuario),
 que construye el alta desde la pantalla de Equipo.
 
+### Pruebas de extremo a extremo
+
+Playwright abre un navegador de verdad, entra por la pantalla de acceso y
+recorre la aplicación en dos tamaños, escritorio y móvil
+([JES-100](https://linear.app/jesus-dario-castillo-betacourt/issue/JES-100/instalar-playwright-para-probar-el-crm-de-punta-a-punta)).
+
+La primera vez hay que descargar el navegador y añadir a `.env.local` dos
+cuentas de **desarrollo**, una propietaria y una comercial, que ya tengan su
+contraseña. Las cuatro variables están en `.env.example`:
+
+```bash
+npx playwright install chromium
+```
+
+Después:
+
+```bash
+npm run test:e2e              # toda la batería, en la terminal
+npm run test:e2e:ui           # la misma, viéndola en una ventana
+npx playwright show-report    # el informe de la última ejecución
+```
+
+Si ya tienes `npm run dev` abierto, las pruebas usan ese servidor. Si no, lo
+arrancan y lo apagan al terminar.
+
+**Nunca corren contra producción.** Lo impiden dos cosas:
+
+- `playwright.config.ts` se niega a arrancar si `NEXT_PUBLIC_CONVEX_URL` no
+  es el despliegue que `CONVEX_DEPLOYMENT` marca como `dev:`.
+- El paso de acceso corta en el navegador cualquier conexión a otro despliegue
+  de Convex. Cubre el caso de un servidor que ya estaba abierto con otro
+  entorno.
+
+Hoy **solo leen**: ninguna prueba guarda datos de negocio. Las que escriban
+esperan a que se decida dónde viven los datos de prueba, porque los clientes no
+se pueden borrar.
+
 ### Comandos
 
 | Comando | Qué hace |
@@ -146,6 +183,8 @@ que construye el alta desde la pantalla de Equipo.
 | `npm run build` | Compilación de producción |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript sin emitir |
+| `npm run test:e2e` | Pruebas de extremo a extremo con Playwright |
+| `npm run test:e2e:ui` | Las mismas, en la ventana de Playwright |
 
 ---
 
