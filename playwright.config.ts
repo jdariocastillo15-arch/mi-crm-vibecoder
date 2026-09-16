@@ -21,7 +21,12 @@ export default defineConfig({
   // cinco segundos que da Playwright por defecto.
   expect: { timeout: 10_000 },
   reporter: [["list"], ["html", { open: "never" }]],
+  // Con el navegador A LA VISTA y una prueba detrás de otra, para poder seguir
+  // en la ventana lo que se está probando. Lo pidió el dueño como regla. En
+  // integración continua no hay pantalla, así que ahí corre sin ventana.
+  workers: process.env.CI ? undefined : 1,
   use: {
+    headless: Boolean(process.env.CI),
     baseURL: URL_BASE,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
