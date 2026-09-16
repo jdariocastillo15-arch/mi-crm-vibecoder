@@ -89,6 +89,16 @@ export const actualizar = mutation({
     if (nombre.length === 0) throw new Error("Añade un nombre");
 
     const email = campos.email?.trim() || "";
+    const telefono = campos.telefono?.trim() || "";
+
+    // La misma regla que el alta (`crear`): un cliente con el que no hay forma
+    // de ponerse en contacto no sirve de nada. Antes solo la aplicaba el alta,
+    // y al editar se podían vaciar los dos campos y guardar (JES-101). Va con
+    // los espacios ya quitados, y antes del `patch`: si no pasa, no se toca nada.
+    if (telefono.length === 0 && email.length === 0) {
+      throw new Error("Indica al menos un teléfono o un email");
+    }
+
     // Solo se valida si el email CAMBIA. Si no, una ficha antigua con un email
     // inválido quedaría bloqueada para todo lo demás: cambiar un teléfono o el
     // estado fallaría por un dato que quien edita ni ha tocado.
@@ -101,7 +111,7 @@ export const actualizar = mutation({
     await ctx.db.patch(clienteId, {
       nombre,
       empresa: campos.empresa?.trim() || undefined,
-      telefono: campos.telefono?.trim() || undefined,
+      telefono: telefono || undefined,
       email: email || undefined,
       canal: campos.canal,
       nota: campos.nota?.trim() || undefined,

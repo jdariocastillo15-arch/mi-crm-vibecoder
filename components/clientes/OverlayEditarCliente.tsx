@@ -17,6 +17,7 @@ import {
   type Tono,
 } from "@/lib/constants";
 import { esEmailValido } from "@/lib/format";
+import { cn } from "@/lib/cn";
 
 /**
  * Editar cliente — implementa JES-54.
@@ -73,8 +74,12 @@ export function OverlayEditarCliente({
 
   const nombre = form.nombre.trim();
   const email = form.email.trim();
+  const telefono = form.telefono.trim();
 
   const errorNombre = !nombre ? "Añade un nombre" : null;
+  // La regla del alta también al editar: sin teléfono ni email no se guarda
+  // (JES-101). El servidor lo vuelve a comprobar en `clientes.actualizar`.
+  const faltaContacto = !telefono && !email;
 
   // Aquí NO se exige un medio de contacto, a diferencia del alta. Ni el diseño
   // ni `clientes.actualizar` lo piden, y con razón: quien abre esto para marcar
@@ -91,7 +96,7 @@ export function OverlayEditarCliente({
 
   async function guardar() {
     setIntentado(true);
-    if (errorNombre || errorEmail) return;
+    if (errorNombre || errorEmail || faltaContacto) return;
 
     setGuardando(true);
     try {
@@ -103,7 +108,7 @@ export function OverlayEditarCliente({
         nombre,
         empresa: form.empresa.trim() || undefined,
         email: email || undefined,
-        telefono: form.telefono.trim() || undefined,
+        telefono: telefono || undefined,
         canal: canal ?? undefined,
         nota: form.nota.trim() || undefined,
         estado,
@@ -163,6 +168,18 @@ export function OverlayEditarCliente({
         placeholder="+34 600 000 000"
         icon={<Phone size={16} strokeWidth={1.5} />}
       />
+
+      {/* La misma línea que en «Nuevo cliente», y por el mismo motivo: la regla
+          es de los DOS campos, así que no es el error de ninguno. Siempre
+          visible, y en rojo tras intentar guardar. */}
+      <p
+        className={cn(
+          "text-[13px]",
+          intentado && faltaContacto ? "text-error-text" : "text-text-muted",
+        )}
+      >
+        Indica al menos un teléfono o un email
+      </p>
 
       {/* El estado va aquí, tras los datos de contacto, donde lo pone el
           diseño, y no al final: es el control por el que más se abre este

@@ -90,6 +90,41 @@ test("Clientes filtra en vivo y abre la ficha", async ({ page, isMobile }) => {
   await expect(titulo(page, "Clientes")).toBeVisible();
 });
 
+test("Editar cliente no deja quitar todo medio de contacto", async ({ page }) => {
+  // Un guardado que se colara borraría el contacto de un cliente de verdad. Se
+  // cortan en el WebSocket las llamadas a `clientes:actualizar`: si la regla se
+  // rompiera, la prueba fallaría sin haber tocado ningún dato.
+  let guardadosCortados = 0;
+  await page.routeWebSocket(/\.convex\.cloud\//, (ws) => {
+    const servidor = ws.connectToServer();
+    ws.onMessage((mensaje) => {
+      if (String(mensaje).includes('"clientes:actualizar"')) guardadosCortados += 1;
+      else servidor.send(mensaje);
+    });
+  });
+
+  await page.goto("/clientes");
+  await page.locator('a[href^="/clientes/"]').first().click();
+  await expect(page).toHaveURL(/\/clientes\/[^/]+$/);
+  await page.getByRole("link", { name: "Editar", exact: true }).click();
+  const dialogo = page.getByRole("dialog", { name: "Editar cliente" });
+  await expect(dialogo).toBeVisible();
+
+  // Espacios en el email: también cuentan como vacío.
+  await dialogo.getByLabel("Teléfono").fill("");
+  await dialogo.getByLabel("Email").fill("   ");
+  await dialogo.getByRole("button", { name: "Guardar" }).click();
+
+  await expect(dialogo).toBeVisible();
+  await expect(
+    dialogo.getByText("Indica al menos un teléfono o un email"),
+  ).toHaveCSS("color", "rgb(153, 27, 27)");
+  expect(guardadosCortados).toBe(0);
+
+  await dialogo.getByRole("button", { name: "Cancelar" }).click();
+  await expect(dialogo).toBeHidden();
+});
+
 test("Ventas enseña las dos cifras, el filtro y el alta", async ({ page }) => {
   await page.goto("/ventas");
 
