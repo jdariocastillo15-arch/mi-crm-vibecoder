@@ -90,6 +90,20 @@ test("Clientes filtra en vivo y abre la ficha", async ({ page, isMobile }) => {
   await expect(titulo(page, "Clientes")).toBeVisible();
 });
 
+test("Clientes abre el alta si se carga con ?nuevo=1", async ({ page }) => {
+  // Pasa al recargar con el formulario abierto, o con un enlace guardado. Antes
+  // no se abría, y el botón «Nuevo cliente» de la barra dejaba de responder
+  // porque la URL ya era esa.
+  await page.goto("/clientes?nuevo=1");
+
+  const dialogo = page.getByRole("dialog", { name: "Nuevo cliente" });
+  await expect(dialogo).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(dialogo).toBeHidden();
+  await expect(page).toHaveURL(/\/clientes$/);
+});
+
 test("Editar cliente no deja quitar todo medio de contacto", async ({ page }) => {
   // Un guardado que se colara borraría el contacto de un cliente de verdad. Se
   // cortan en el WebSocket las llamadas a `clientes:actualizar`: si la regla se

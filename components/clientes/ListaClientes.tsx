@@ -59,7 +59,13 @@ export function ListaClientes() {
   // Ajustar estado durante el render es el patrón que React documenta para
   // reaccionar a un cambio de entrada. En un efecto se pintaría un fotograma
   // con el formulario ya abierto y el contenido de la vez anterior.
-  const [urlAntes, setUrlAntes] = useState(pedidoPorUrl);
+  //
+  // Arranca en `false` y no en `pedidoPorUrl`, y es a propósito. Con
+  // `pedidoPorUrl` las dos coincidían ya en la primera pintura, así que cargar
+  // la pantalla con `?nuevo=1` —al recargar con el formulario abierto, o desde
+  // un enlace— no lo abría. Y el botón de la barra dejaba de responder, porque
+  // la URL ya era esa (JES-101).
+  const [urlAntes, setUrlAntes] = useState(false);
   if (pedidoPorUrl !== urlAntes) {
     setUrlAntes(pedidoPorUrl);
     if (pedidoPorUrl) {
