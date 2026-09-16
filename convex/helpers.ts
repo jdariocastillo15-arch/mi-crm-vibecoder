@@ -1,9 +1,29 @@
 import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
+import { ConvexError } from "convex/values";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 
-/** El mismo texto para todo lo que sea «tu sesión no vale». */
-const SIN_SESION = "No hay sesión iniciada";
+/**
+ * «Tu sesión no vale», siempre igual y como CÓDIGO, no como texto (JES-101).
+ *
+ * Es un `ConvexError` y no un `Error` porque producción redacta el mensaje de
+ * un `Error` y deja solo «Server Error», mientras que el `data` de un
+ * `ConvexError` sí llega al navegador. La barrera de `app/error.tsx` lo
+ * reconoce por el motivo y lleva al acceso, en vez de enseñar una pantalla de
+ * error. El motivo es el mismo que ya usa `cuenta.ts`.
+ */
+export const MOTIVO_SIN_SESION = "sin_sesion";
+
+function sinSesion() {
+  return new ConvexError({ motivo: MOTIVO_SIN_SESION });
+}
+
+/** ¿Este error es el «sin sesión» de `requireUser`? */
+export function esSinSesion(error: unknown): boolean {
+  if (!(error instanceof ConvexError)) return false;
+  const datos = error.data as { motivo?: unknown } | null;
+  return datos?.motivo === MOTIVO_SIN_SESION;
+}
 
 /**
  * Devuelve el usuario de la sesión, o lanza.
@@ -20,15 +40,15 @@ const SIN_SESION = "No hay sesión iniciada";
  *    caducara su JWT. Lo encontró auditoría (B2).
  * 3. Que esa persona no está de baja.
  *
- * Los tres fallos dan el MISMO mensaje. Distinguirlos le diría a quien tenga un
- * token viejo por qué exactamente ha dejado de valer.
+ * Los tres fallos dan el MISMO motivo, `sin_sesion`. Distinguirlos le diría a
+ * quien tenga un token viejo por qué exactamente ha dejado de valer.
  */
 export async function requireUser(ctx: QueryCtx | MutationCtx) {
   const userId = await getAuthUserId(ctx);
-  if (userId === null) throw new Error(SIN_SESION);
+  if (userId === null) throw sinSesion();
 
   const sesionId = await getAuthSessionId(ctx);
-  if (sesionId === null) throw new Error(SIN_SESION);
+  if (sesionId === null) throw sinSesion();
 
   // El id sale del token, así que puede ser cualquier cosa si alguien lo forja:
   // `db.get` con un id mal formado lanza, y ese error no debe salir en crudo.
@@ -36,16 +56,16 @@ export async function requireUser(ctx: QueryCtx | MutationCtx) {
   try {
     sesion = await ctx.db.get(sesionId);
   } catch {
-    throw new Error(SIN_SESION);
+    throw sinSesion();
   }
 
-  if (sesion === null) throw new Error(SIN_SESION);
-  if (sesion.userId !== userId) throw new Error(SIN_SESION);
-  if (sesion.expirationTime <= Date.now()) throw new Error(SIN_SESION);
+  if (sesion === null) throw sinSesion();
+  if (sesion.userId !== userId) throw sinSesion();
+  if (sesion.expirationTime <= Date.now()) throw sinSesion();
 
   const user = await ctx.db.get(userId);
-  if (user === null) throw new Error("El usuario de la sesión ya no existe");
-  if (user.bajaEn !== undefined) throw new Error(SIN_SESION);
+  if (user === null) throw sinSesion();
+  if (user.bajaEn !== undefined) throw sinSesion();
 
   return user;
 }

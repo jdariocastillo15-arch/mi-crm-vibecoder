@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -6,6 +7,7 @@ import { rolUsuario } from "./schema";
 import {
   requireUser,
   requirePropietaria,
+  esSinSesion,
   esEmailValido,
   normalizaEmail,
   buscarUsuarioPorEmail,
@@ -24,7 +26,8 @@ import {
  */
 
 /**
- * El usuario de la sesión. Devuelve null si no hay sesión, sin lanzar.
+ * El usuario de la sesión. Devuelve null si nadie ha entrado; si hay identidad
+ * pero la sesión ya no vale, LANZA (ver el `catch`).
  *
  * Devuelve el documento entero MÁS `tieneContrasena`, que necesita «Mi cuenta»
  * (JES-48) para no ofrecer «Cambiar contraseña» a quien todavía no tiene
@@ -41,7 +44,19 @@ export const me = query({
     try {
       const user = await requireUser(ctx);
       return { ...user, tieneContrasena: await tieneContrasenaPropia(ctx, user) };
-    } catch {
+    } catch (error) {
+      // Con identidad pero con la sesión muerta —revocada, caducada o de baja—
+      // NO se devuelve null: se relanza, y la barrera de `app/error.tsx` lleva
+      // al acceso. Devolver null dejaba `/cuenta` quieta con «Tu sesión ha
+      // terminado» esperando un clic, porque en esa pantalla nada más lanzaba
+      // (M1 de la auditoría del plan de JES-101). `AppShell` consulta esto en
+      // todas las pantallas, así que la sesión revocada llega siempre.
+      //
+      // Sin identidad, en cambio, nadie ha entrado o ya se salió del todo, y
+      // eso no es un error: sigue siendo null.
+      //
+      // Cualquier otro error se sigue tragando como antes. Es D8 y va aparte.
+      if (esSinSesion(error) && (await getAuthUserId(ctx)) !== null) throw error;
       return null;
     }
   },

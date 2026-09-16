@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useMutation } from "convex/react";
 import { Eye, EyeOff, KeyRound, Mail } from "lucide-react";
@@ -58,6 +58,7 @@ export default function LoginPage({
   const { signIn } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const estadoAcceso = useMutation(api.acceso.estadoAcceso);
   // `use` es un hook: va aquí arriba, incondicional y fuera de cualquier
   // callback. Meterlo dentro del inicializador de `useState` rompe el orden de
@@ -132,6 +133,22 @@ export default function LoginPage({
   useEffect(() => {
     if (isAuthenticated) router.replace("/hoy");
   }, [isAuthenticated, router]);
+
+  /**
+   * Esta pantalla pintada bajo OTRA URL se corrige sola (JES-101, y el tercer
+   * criterio de JES-89).
+   *
+   * Pasa tras una renovación fallida del token. El proveedor de Convex Auth
+   * llama a `invalidateCache` ANTES de publicar que ya no hay sesión
+   * (`@convex-dev/auth/src/react/client.tsx:118` frente a `:120`). Esa acción de
+   * servidor vuelve por el middleware, que ya no ve credenciales y responde con
+   * el contenido de /login, pero la URL no cambia: el acceso aparecía bajo
+   * `/cuenta`. Cualquier efecto dentro del armazón llega tarde, porque el árbol
+   * protegido ya no está. Esta pantalla, en cambio, sí está montada.
+   */
+  useEffect(() => {
+    if (pathname !== "/login") router.replace("/login");
+  }, [pathname, router]);
 
   /** Vuelve al principio dejando la tarjeta limpia de lo anterior. */
   function volverAlCorreo() {
