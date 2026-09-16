@@ -3,6 +3,7 @@
 import { useId } from "react";
 import type {
   InputHTMLAttributes,
+  Ref,
   TextareaHTMLAttributes,
   SelectHTMLAttributes,
   ReactNode,
@@ -73,6 +74,11 @@ function Envoltura({
 }
 
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id"> {
+  /**
+   * Llega al `<input>` con el resto de props: en React 19 `ref` es una prop más.
+   * La usa el acceso para leer lo escrito antes de hidratar (JES-101).
+   */
+  ref?: Ref<HTMLInputElement>;
   label?: string;
   error?: string | null;
   helper?: string;

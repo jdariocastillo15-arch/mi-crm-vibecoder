@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState, type FormEvent } from "react";
+import { use, useEffect, useRef, useState, type FormEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useMutation } from "convex/react";
@@ -68,6 +68,20 @@ export default function LoginPage({
   const [paso, setPaso] = useState<Paso>("correo");
   const [motivo, setMotivo] = useState<MotivoCodigo>("elegir");
   const [email, setEmail] = useState("");
+  /**
+   * El campo del correo, para leerlo al pulsar «Continuar» (JES-101).
+   *
+   * Es el único campo que llega pintado del servidor, y por eso NO es
+   * controlado: con `value`, React le imponía al hidratar su estado, que empieza
+   * vacío, y borraba lo escrito antes de que cargara la página. Medido: seis
+   * intentos de seis. `onChange` lo sigue copiando al estado para la validación
+   * en vivo; lo que manda al enviar es el propio campo.
+   *
+   * Y sin atributo `name`, a propósito: un «Continuar» pulsado antes de que
+   * cargue el JavaScript haría un envío nativo del formulario, y con `name` el
+   * correo acabaría en la URL.
+   */
+  const campoEmail = useRef<HTMLInputElement>(null);
   const [password, setPassword] = useState("");
   const [codigo, setCodigo] = useState("");
   const [passwordNueva, setPasswordNueva] = useState("");
@@ -186,14 +200,20 @@ export default function LoginPage({
    */
   async function continuar(evento: FormEvent) {
     evento.preventDefault();
+    // Del propio campo, no del estado: si se escribió antes de hidratar, el
+    // estado no se enteró. Se guarda en el estado para los pasos siguientes, y se
+    // valida y se envía ya normalizado, como `correo`.
+    const escrito = campoEmail.current?.value ?? email;
+    const correoEscrito = escrito.trim().toLowerCase();
+    setEmail(escrito);
     setIntentado(true);
     setError(null);
 
-    if (!esEmailValido(correo)) return;
+    if (!esEmailValido(correoEscrito)) return;
 
     setCargando(true);
     try {
-      const siguiente = await estadoAcceso({ email: correo });
+      const siguiente = await estadoAcceso({ email: correoEscrito });
       setMotivo("elegir");
       setPaso(siguiente === "contrasena" ? "contrasena" : "codigo");
       setIntentado(false);
@@ -356,7 +376,8 @@ export default function LoginPage({
                   autoFocus
                   icon={<Mail size={16} strokeWidth={1.5} />}
                   placeholder="tu@empresa.com"
-                  value={email}
+                  ref={campoEmail}
+                  defaultValue={email}
                   onChange={(e) => setEmail(e.target.value)}
                   error={errorEmail}
                   disabled={cargando}
