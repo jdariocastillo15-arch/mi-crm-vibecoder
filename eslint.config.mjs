@@ -13,6 +13,10 @@ const eslintConfig = [
       "node_modules/**",
       // Lo escribe el CLI de Convex; no es código nuestro.
       "convex/_generated/**",
+      // Lo que deja Playwright al ejecutarse: informes y trazas empaquetadas.
+      "playwright-report/**",
+      "test-results/**",
+      "blob-report/**",
     ],
   },
   ...coreWebVitals,
