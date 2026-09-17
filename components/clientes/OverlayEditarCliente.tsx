@@ -79,12 +79,15 @@ export function OverlayEditarCliente({
   const errorNombre = !nombre ? "Añade un nombre" : null;
   // La regla del alta también al editar: sin teléfono ni email no se guarda
   // (JES-101). El servidor lo vuelve a comprobar en `clientes.actualizar`.
+  //
+  // Hasta JES-101 aquí no se exigía, para que quien abre esto para marcar
+  // "Ganado" no tuviera que arreglar antes un teléfono que ya faltaba. Eso sigue
+  // valiendo: basta con uno de los dos, y a una ficha con email no se le pide
+  // teléfono. Solo se frena la ficha que se queda sin NINGUNO. El alta nunca la
+  // ha dejado crear; solo podía salir de este formulario, antes del arreglo. Si
+  // queda alguna así, habrá que darle un contacto para volver a guardarla.
   const faltaContacto = !telefono && !email;
 
-  // Aquí NO se exige un medio de contacto, a diferencia del alta. Ni el diseño
-  // ni `clientes.actualizar` lo piden, y con razón: quien abre esto para marcar
-  // "Ganado" no tiene por qué arreglar antes un teléfono que ya faltaba.
-  //
   // El email se valida con la MISMA regla que el servidor —solo si cambia—,
   // para que los dos acepten y rechacen exactamente lo mismo. Un email antiguo
   // mal escrito no bloquea el resto de la ficha; uno nuevo mal escrito sí.
