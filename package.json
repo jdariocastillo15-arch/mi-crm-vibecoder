@@ -15,7 +15,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:ui": "playwright test --project=sesion && playwright test --ui",
     "convex:key": "convex deployment token create vibe-crm-dev --save-env",
     "convex:key:prod": "convex deployment token create railway --prod"
   },

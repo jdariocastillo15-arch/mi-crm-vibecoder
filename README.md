@@ -152,7 +152,7 @@ Después:
 
 ```bash
 npm run test:e2e              # toda la batería, en la terminal
-npm run test:e2e:ui           # la misma, viéndola en una ventana
+npm run test:e2e:ui           # entra con las dos cuentas y abre la ventana de Playwright
 npx playwright show-report    # el informe de la última ejecución
 ```
 
@@ -161,6 +161,13 @@ seguirlas en la ventana. Con la variable `CI` puesta corren sin ventana.
 
 Si ya tienes `npm run dev` abierto, las pruebas usan ese servidor. Si no, lo
 arrancan y lo apagan al terminar.
+
+`npm run test:e2e:ui` entra primero con las dos cuentas y solo después abre la
+ventana de Playwright. La ventana no lo hace por su cuenta: ejecuta el paso de
+acceso únicamente si su proyecto, `sesion`, está marcado en el filtro. Sin ese
+paso, en una copia recién descargada no habría sesiones guardadas y fallarían
+todas las pruebas que entran. Si las sesiones caducan con la ventana abierta,
+basta con marcar `sesion` y volver a lanzar.
 
 **Nunca corren contra producción.** Lo impiden dos cosas:
 
@@ -187,7 +194,7 @@ se pueden borrar.
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript sin emitir |
 | `npm run test:e2e` | Pruebas de extremo a extremo con Playwright |
-| `npm run test:e2e:ui` | Las mismas, en la ventana de Playwright |
+| `npm run test:e2e:ui` | Entra con las dos cuentas y abre las mismas en la ventana de Playwright |
 
 ---
 
