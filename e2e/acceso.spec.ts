@@ -62,7 +62,9 @@ test("el correo escrito antes de que cargue la página no se pierde", async ({
 
   await page.goto("/login", { waitUntil: "commit" });
   const campo = page.getByLabel("Email", { exact: true });
-  const escrito = "  Nadie.Prueba@Ejemplo.COM ";
+  // `.test` está reservado para pruebas (RFC 6761): ese dominio no existe ni
+  // existirá, así que ningún correo puede llegar a nadie de verdad.
+  const escrito = "  Nadie.Prueba@Ejemplo.TEST ";
   await campo.fill(escrito);
   soltar();
 
@@ -85,7 +87,7 @@ test("el correo escrito antes de que cargue la página no se pierde", async ({
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Elige tu contraseña" })).toBeVisible();
   await expect(
-    page.getByText("Te hemos enviado un código a nadie.prueba@ejemplo.com.", {
+    page.getByText("Te hemos enviado un código a nadie.prueba@ejemplo.test.", {
       exact: false,
     }),
   ).toBeVisible();
