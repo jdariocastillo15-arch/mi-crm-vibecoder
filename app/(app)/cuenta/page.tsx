@@ -202,9 +202,13 @@ function CuentaCargando() {
 }
 
 /**
- * La sesión se ha ido mientras esta pantalla estaba abierta — por ejemplo
- * porque han dado de baja a esa persona, o porque cambió su contraseña en otro
- * dispositivo.
+ * «Mi cuenta» sin nadie dentro: `users.me` devuelve null cuando la consulta
+ * llega sin identidad, por ejemplo porque el navegador ya perdió sus tokens.
+ * También, todavía, con cualquier error que no sea de sesión (D8).
+ *
+ * La sesión que se va con esta pantalla abierta —una baja, o un cambio de
+ * contraseña en otro dispositivo— ya NO llega aquí: desde JES-101 `users.me`
+ * lanza, y la barrera de `app/error.tsx` lleva sola al acceso.
  *
  * LA SALIDA ES UN BOTÓN, NO UN ENLACE, y no es una preferencia de estilo.
  *
@@ -216,7 +220,7 @@ function CuentaCargando() {
  * encontró auditoría.
  *
  * Ahora cierra sesión de verdad antes de navegar, con el mismo `useSalirAlAcceso`
- * que usan las otras dos salidas.
+ * que usan las demás salidas.
  */
 function SinSesion() {
   const salir = useSalirAlAcceso();

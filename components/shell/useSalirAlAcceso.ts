@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
 
 /**
- * Salir de la aplicación y llegar al acceso. Lo comparten las TRES salidas:
- * el diálogo de «Mi cuenta», el botón de la barra lateral y la tarjeta de
- * sesión terminada.
+ * Salir de la aplicación y llegar al acceso. Lo comparten las CUATRO salidas:
+ * el diálogo de «Mi cuenta», el botón de la barra lateral, la tarjeta de
+ * sesión terminada y la barrera de error de `app/error.tsx`, que sale sola
+ * cuando el servidor dice que la sesión ya no vale (JES-101).
  *
  * EL ORDEN NO ES DECORATIVO, y aquí está el motivo de que esto sea un hook y no
  * tres copias.
@@ -23,7 +24,8 @@ import { useAuthActions } from "@convex-dev/auth/react";
  *
  * Comprobado en desarrollo antes de escribir esto: la pantalla no rebotaba sin
  * más, reventaba con «No hay sesión iniciada» y sin nada que lo recogiera,
- * porque la aplicación todavía no tiene barrera de error (R1 de la auditoría).
+ * porque la aplicación aún no tenía barrera de error (R1 de la auditoría). Hoy
+ * la tiene, y ese error es un `ConvexError` con el motivo `sin_sesion`.
  *
  * `signOut()` borra los tokens del navegador, así que después el middleware ya
  * no lo da por autenticado y `/login` se queda en `/login`. Por eso se **espera**

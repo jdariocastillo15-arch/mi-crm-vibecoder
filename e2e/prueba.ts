@@ -42,16 +42,16 @@ export { expect };
  * `llegada`, que es lo que tiene que aparecer si la pantalla lo ha recibido.
  *
  * REINTENTA, y no por capricho. La pantalla llega pintada del servidor y React
- * la hidrata un momento después, y lo que se escribe antes se pierde: el campo
- * es controlado y React le impone su estado, que empieza vacío.
+ * la hidrata un momento después. Si «Continuar» se pulsa antes de que cargue el
+ * JavaScript, el navegador envía el formulario por su cuenta y la página se
+ * recarga vacía.
  *
- * Medido, no supuesto. Escribiendo antes de la hidratación, el campo estaba
- * vacío tres segundos después en seis intentos de seis; escribiendo después,
- * en ninguno. Y `page.goto` no garantiza llegar hidratado: en una de las
- * primeras ejecuciones se escribió el correo y «Continuar» lo recibió vacío.
+ * Hasta JES-101 había otro motivo más: lo escrito antes de hidratar se borraba,
+ * porque el campo era controlado. Eso ya no pasa, y lo vigila su propia prueba
+ * en `acceso.spec.ts`. Queda el clic temprano.
  *
  * No hay una señal pública de «ya está hidratado», así que se repite el paso
- * entero hasta que la pantalla responde a lo escrito.
+ * entero hasta que la pantalla responde.
  */
 export async function continuarConCorreo(
   page: Page,

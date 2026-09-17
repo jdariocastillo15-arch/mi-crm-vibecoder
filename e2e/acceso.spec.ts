@@ -44,3 +44,51 @@ test("un correo sin dominio completo se avisa sin salir del paso", async ({
     page.getByRole("heading", { level: 1, name: "Inicia sesión" }),
   ).toBeVisible();
 });
+
+test("el correo escrito antes de que cargue la página no se pierde", async ({
+  page,
+}) => {
+  // Se retienen los scripts mientras se escribe: así la escritura ocurre, seguro,
+  // antes de que React hidrate la pantalla. Escribir «al instante» no lo
+  // garantiza.
+  let soltar: () => void = () => {};
+  const retenidos = new Promise<void>((resolver) => {
+    soltar = resolver;
+  });
+  await page.route("**/_next/static/chunks/**", async (ruta) => {
+    await retenidos;
+    await ruta.continue();
+  });
+
+  await page.goto("/login", { waitUntil: "commit" });
+  const campo = page.getByLabel("Email", { exact: true });
+  // `.test` está reservado para pruebas (RFC 6761): ese dominio no existe ni
+  // existirá, así que ningún correo puede llegar a nadie de verdad.
+  const escrito = "  Nadie.Prueba@Ejemplo.TEST ";
+  await campo.fill(escrito);
+  soltar();
+
+  // Cuándo ha hidratado: React marca cada nodo que gestiona. Es un detalle
+  // interno, y aquí solo sirve para saber cuándo mirar; el margen de después
+  // deja terminar la hidratación, que es donde se borraba lo escrito.
+  await expect
+    .poll(() =>
+      campo.evaluate((el) => Object.keys(el).some((k) => k.startsWith("__reactProps$"))),
+    )
+    .toBe(true);
+  await page.waitForTimeout(1_000);
+  // Sin los espacios de los extremos: en un campo `type="email"` los quita el
+  // propio navegador, por la sanitización de valores de HTML. Las mayúsculas
+  // siguen ahí, y las normaliza la aplicación al enviar.
+  await expect(campo).toHaveValue(escrito.trim());
+
+  // Y lo escrito llega de verdad, normalizado. Un correo desconocido no dispara
+  // nada en el servidor (`convex/acceso.ts`).
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Elige tu contraseña" })).toBeVisible();
+  await expect(
+    page.getByText("Te hemos enviado un código a nadie.prueba@ejemplo.test.", {
+      exact: false,
+    }),
+  ).toBeVisible();
+});
