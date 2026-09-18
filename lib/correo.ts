@@ -63,6 +63,25 @@ export function normalizaEmail(email: string): string {
 }
 
 /**
+ * El `snippet` de Gmail, legible.
+ *
+ * Viene con las entidades HTML escapadas: un correo que citaba
+ * `<soport@vibe-crm-pro.net>` llega como `&lt;soport@vibe-crm-pro.net&gt;`, y en
+ * la ficha se lee tal cual. Visto en la prueba real del 2026-09-18.
+ *
+ * Se deshacen las cinco que escapa Gmail, y `&amp;` la última: si fuera la
+ * primera, un `&amp;lt;` literal acabaría convertido en `<`.
+ */
+export function textoDeGmail(valor: string): string {
+  return valor
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+/**
  * Las direcciones de una cabecera `From`, `To` o `Cc`.
  *
  * Vienen como `Nombre <a@b.com>, c@d.com`. Partir por comas basta: un nombre
@@ -169,7 +188,7 @@ export function clasificar(
     direccion: saliente ? "saliente" : "entrante",
     contraparte: coincidencia.direccion,
     asunto: (cabecera("subject") ?? "").trim(),
-    fragmento: mensaje.snippet ?? "",
+    fragmento: textoDeGmail(mensaje.snippet ?? ""),
     hiloId: mensaje.threadId,
     // Gmail siempre manda `internalDate` en un mensaje de verdad; el cero solo
     // está para que el tipo sea honesto.
