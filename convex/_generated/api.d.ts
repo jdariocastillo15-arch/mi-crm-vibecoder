@@ -11,9 +11,11 @@
 import type * as acceso from "../acceso.js";
 import type * as auth from "../auth.js";
 import type * as clientes from "../clientes.js";
+import type * as correos from "../correos.js";
 import type * as crons from "../crons.js";
 import type * as cuenta from "../cuenta.js";
 import type * as equipo from "../equipo.js";
+import type * as gmail from "../gmail.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as interacciones from "../interacciones.js";
@@ -32,9 +34,11 @@ declare const fullApi: ApiFromModules<{
   acceso: typeof acceso;
   auth: typeof auth;
   clientes: typeof clientes;
+  correos: typeof correos;
   crons: typeof crons;
   cuenta: typeof cuenta;
   equipo: typeof equipo;
+  gmail: typeof gmail;
   helpers: typeof helpers;
   http: typeof http;
   interacciones: typeof interacciones;
