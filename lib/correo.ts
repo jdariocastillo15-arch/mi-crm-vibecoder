@@ -234,6 +234,16 @@ export function consultaGmail(ventana: Ventana): string {
   return `after:${ventana.desdeEpoch} before:${ventana.hastaEpoch} -in:chats -in:drafts`;
 }
 
+export type AvanceVentana = {
+  ventana: Ventana;
+  /**
+   * La ventana no ha podido avanzar: en un mismo segundo hay más mensajes de
+   * los que caben en el presupuesto de páginas. No se toca nada, y quien llama
+   * lo registra como error.
+   */
+  atascada: boolean;
+};
+
 /**
  * Dónde se queda la lectura después de una pasada.
  *
@@ -243,18 +253,29 @@ export function consultaGmail(ventana: Ventana): string {
  *   y la carga inicial no alcanzaría nunca el régimen normal.
  * - **Se acabaron las páginas:** la ventana sigue abierta y baja el techo hasta
  *   el mensaje más antiguo que se ha mirado. El suelo NO se toca.
+ * - **No hay avance posible:** se deja la ventana como está y se avisa.
+ *
+ * Ese último caso es el arreglo de la segunda vuelta de M1. Antes se forzaba el
+ * techo un segundo hacia abajo «para que la ventana se cerrara alguna vez», y
+ * eso **perdía correo en silencio**: con 501 mensajes en el mismo segundo y un
+ * presupuesto de 500, la segunda pasada bajaba el techo por debajo de ese
+ * segundo y el que faltaba no se leía nunca, mientras el estado declaraba la
+ * ventana completada. Más vale atascarse y decirlo que avanzar dejándose algo.
  */
 export function siguienteVentana(
   ventana: Ventana,
   resultado: { agotado: boolean; masAntiguoVistoMs: number | null },
   ahoraMs: number,
-): Ventana {
+): AvanceVentana {
   if (resultado.agotado || resultado.masAntiguoVistoMs === null) {
     const ahora = Math.floor(ahoraMs / 1000);
     return {
-      desdeEpoch: ventana.cubiertoHasta - SOLAPE_SEGUNDOS,
-      hastaEpoch: ahora,
-      cubiertoHasta: ahora,
+      atascada: false,
+      ventana: {
+        desdeEpoch: ventana.cubiertoHasta - SOLAPE_SEGUNDOS,
+        hastaEpoch: ahora,
+        cubiertoHasta: ahora,
+      },
     };
   }
 
@@ -262,10 +283,10 @@ export function siguienteVentana(
   // `before:` va por segundos; el dedupe por id de Gmail absorbe la repetición.
   const propuesto = Math.floor(resultado.masAntiguoVistoMs / 1000) + 1;
 
-  // Y si no hubiera avance —cien mensajes en el mismo segundo— se fuerza uno,
-  // o la ventana no se cerraría jamás.
-  return {
-    ...ventana,
-    hastaEpoch: Math.min(propuesto, ventana.hastaEpoch - 1),
-  };
+  // Si el techo propuesto no baja, en ese segundo quedan mensajes por leer.
+  if (propuesto >= ventana.hastaEpoch) {
+    return { ventana, atascada: true };
+  }
+
+  return { ventana: { ...ventana, hastaEpoch: propuesto }, atascada: false };
 }

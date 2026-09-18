@@ -207,18 +207,25 @@ export const cerrarPasada = internalMutation({
  * que se consigue reventando es que el cron se apague. El motivo queda en
  * `sincronizacionCorreo.ultimoError` y la ventana se guarda **sin avanzar**,
  * así que la pasada siguiente reintenta exactamente lo mismo.
+ *
+ * Eso vale también para la configuración: que falten variables, o que la clave
+ * esté mal pegada, sale por el mismo sitio y se apunta igual. La única
+ * excepción es que falte `GMAIL_BUZON`, porque sin él no se sabe en qué fila
+ * escribirlo; eso solo se avisa por consola.
  */
 export const sincronizar = internalAction({
   args: {},
   handler: async (ctx) => {
-    const cred = credenciales();
-    if (cred === null) {
-      console.warn("Lectura del buzón apagada: faltan las variables de Gmail");
+    // El buzón se mira aparte y el primero: sin él no se sabe ni en qué fila
+    // apuntar el fallo. Es el único caso que no puede quedar registrado.
+    const buzon = process.env.GMAIL_BUZON;
+    if (buzon === undefined || buzon.length === 0) {
+      console.warn("Lectura del buzón apagada: falta GMAIL_BUZON");
       return;
     }
 
     const datos = await ctx.runQuery(internal.correos.datosDeLaPasada, {
-      buzon: cred.buzon,
+      buzon,
     });
 
     const ventana = datos.ventana ?? ventanaInicial(Date.now());
@@ -233,6 +240,16 @@ export const sincronizar = internalAction({
     };
 
     try {
+      // `credenciales()` se llama DENTRO del try a propósito: descodifica la
+      // clave de base64, y una mal pegada lanzaría ahí mismo, fuera de todo
+      // registro. Que falte configuración también es un fallo que se apunta.
+      const cred = credenciales();
+      if (cred === null) {
+        throw new Error(
+          "Faltan variables de Gmail: la cuenta de servicio o su clave",
+        );
+      }
+
       const token = await tokenDeAcceso(cred);
       const consulta = encodeURIComponent(consultaGmail(ventana));
 
@@ -319,14 +336,22 @@ export const sincronizar = internalAction({
         }
       } while (pagina !== undefined);
 
+      const avance = siguienteVentana(
+        ventana,
+        { agotado, masAntiguoVistoMs },
+        Date.now(),
+      );
+
       await ctx.runMutation(internal.correos.cerrarPasada, {
-        buzon: cred.buzon,
-        ventana: siguienteVentana(
-          ventana,
-          { agotado, masAntiguoVistoMs },
-          Date.now(),
-        ),
+        buzon,
+        ventana: avance.ventana,
         descartados,
+        // Atascada: la ventana se queda como estaba y se dice por qué. Nunca se
+        // fuerza el techo hacia abajo, que es lo que perdía correo en silencio.
+        error: avance.atascada
+          ? `La ventana no avanza: hay más de ${PAGINAS_POR_PASADA * 100} ` +
+            `mensajes en el mismo segundo. Sube el presupuesto de páginas.`
+          : undefined,
       });
     } catch (error) {
       const motivo =
@@ -334,7 +359,7 @@ export const sincronizar = internalAction({
       console.error(`La lectura del buzón falló: ${motivo}`);
 
       await ctx.runMutation(internal.correos.cerrarPasada, {
-        buzon: cred.buzon,
+        buzon,
         ventana,
         descartados,
         error: motivo,
