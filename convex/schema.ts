@@ -46,6 +46,12 @@ export const canalInteraccion = v.union(
   v.literal("en_persona"),
 );
 
+/** Si el buzón de la empresa mandó ese correo o lo recibió. */
+export const direccionCorreo = v.union(
+  v.literal("entrante"),
+  v.literal("saliente"),
+);
+
 /** Estado de una venta u oportunidad. */
 export const estadoVenta = v.union(
   v.literal("abierta"),
@@ -157,6 +163,87 @@ export default defineSchema({
   })
     .index("by_cliente", ["clienteId"])
     .index("by_cliente_fecha", ["clienteId", "fecha"]),
+
+  /**
+   * Correos cruzados con un cliente, traídos del buzón de la empresa — JES-103.
+   *
+   * Tabla aparte y no una interacción más porque `interacciones.autorId` es
+   * obligatorio y apunta a alguien del equipo: un correo que entra no lo ha
+   * anotado nadie. Donde sí se juntan las dos cosas es en la línea de tiempo de
+   * la ficha, que es donde tiene sentido verlas (`lib/historial.ts`).
+   *
+   * **No guarda el cuerpo**, por decisión del dueño: con el asunto y el
+   * fragmento se sabe de qué iba y cuándo fue, y así la correspondencia entera
+   * de los clientes no se duplica en otra base de datos.
+   */
+  correos: defineTable({
+    clienteId: v.id("clientes"),
+    /**
+     * El id del mensaje en Gmail. Es lo único que impide traer dos veces el
+     * mismo correo, y hace falta: la sincronización repite ventanas a propósito
+     * —hay diez minutos de solape— y una acción de Convex no es transaccional.
+     */
+    gmailId: v.string(),
+    hiloId: v.string(),
+    direccion: direccionCorreo,
+    /** La dirección del cliente, normalizada con `helpers.ts#normalizaEmail`. */
+    contraparte: v.string(),
+    asunto: v.string(),
+    /** El `snippet` de Gmail: unas 200 letras. Nunca el cuerpo. */
+    fragmento: v.string(),
+    /** YYYY-MM-DD, día de negocio, como el resto del historial. */
+    fecha: v.string(),
+    /**
+     * El `internalDate` de Gmail, en milisegundos: CUÁNDO SE MANDÓ el correo.
+     * Por eso desempata en el historial y no lo hace `_creationTime`, que diría
+     * cuándo se descargó — en una importación de treinta días, el mismo
+     * instante para todos.
+     */
+    recibidoEn: v.number(),
+  })
+    .index("by_cliente", ["clienteId"])
+    .index("by_gmail", ["gmailId"]),
+
+  /**
+   * Por dónde va la lectura del buzón: la maquinaria de `correos` (JES-103).
+   *
+   * Una fila por buzón, con la ventana de tiempo que queda por leer,
+   * `[desdeEpoch, hastaEpoch)`, que se consume **bajando el techo**.
+   *
+   * Que baje el techo en vez de subir el suelo no es un capricho:
+   * `messages.list` devuelve de lo más nuevo a lo más viejo y no admite
+   * invertirlo, así que lo que falta por leer está siempre POR DEBAJO de lo
+   * leído. Subir el suelo con lo procesado en una pasada parcial se saltaba en
+   * silencio todo lo anterior. Lo encontró auditoría (M1).
+   */
+  sincronizacionCorreo: defineTable({
+    buzon: v.string(),
+    /** Segundos. Suelo de la ventana pendiente. Solo sube al cerrarla. */
+    desdeEpoch: v.number(),
+    /** Segundos. Techo de la ventana pendiente. Baja en cada pasada parcial. */
+    hastaEpoch: v.number(),
+    /**
+     * Segundos. El techo con el que se abrió la ventana: por encima ya está
+     * todo leído. De aquí sale el suelo siguiente, y no del techo, que para
+     * entonces ya ha bajado. Con el techo se volvería a recorrer entero lo
+     * recién importado, y la carga inicial no alcanzaría el régimen normal.
+     */
+    cubiertoHasta: v.number(),
+    /** Milisegundos. Cuándo acabó la última pasada, saliera bien o mal. */
+    ultimaPasada: v.number(),
+    /**
+     * Lo que no se guardó y por qué, en números. Sin direcciones y sin
+     * contenido: esto se mira para saber si hay fichas que arreglar, no para
+     * leer correo.
+     */
+    descartados: v.object({
+      sinFicha: v.number(),
+      ambiguos: v.number(),
+      variosClientes: v.number(),
+    }),
+    /** El último fallo, si lo hubo. El cron nunca lanza: lo deja aquí. */
+    ultimoError: v.optional(v.string()),
+  }).index("buzon", ["buzon"]),
 
   ventas: defineTable({
     clienteId: v.id("clientes"),
