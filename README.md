@@ -156,8 +156,8 @@ npm run test:e2e:ui           # entra con las dos cuentas y abre la ventana de P
 npx playwright show-report    # el informe de la última ejecución
 ```
 
-Las pruebas abren Chromium **a la vista** y van una detrás de otra, para poder
-seguirlas en la ventana. Con la variable `CI` puesta corren sin ventana.
+Las pruebas corren **sin ventana** y van una detrás de otra. Para mirar una por
+dentro está `npm run test:e2e:ui`, que abre la ventana de Playwright.
 
 Si ya tienes `npm run dev` abierto, las pruebas usan ese servidor. Si no, lo
 arrancan y lo apagan al terminar.
