@@ -25,4 +25,15 @@ crons.interval(
   {},
 );
 
+// Cada cuarto de hora es suficiente para un historial de cliente, y deja la
+// ventana incremental tan pequeña que una pasada normal cabe de sobra en el
+// presupuesto de páginas. Ver `correos.sincronizar`: no lanza nunca, así que un
+// fallo de Google no apaga esto.
+crons.interval(
+  "leer el correo del buzon",
+  { minutes: 15 },
+  internal.correos.sincronizar,
+  {},
+);
+
 export default crons;

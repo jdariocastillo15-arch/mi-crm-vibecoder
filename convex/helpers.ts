@@ -93,14 +93,20 @@ export async function requirePropietaria(ctx: QueryCtx | MutationCtx) {
  */
 export const ZONA_NEGOCIO = "Europe/Madrid";
 
-/** Fecha de hoy en YYYY-MM-DD, según el día de negocio. */
-export function hoy(): string {
+/**
+ * Fecha en YYYY-MM-DD según el día de negocio. Sin argumento, la de hoy.
+ *
+ * La marca opcional es para fechar algo que pasó en otro momento —un correo
+ * traído del buzón, JES-103— en el mismo día de negocio que usa todo lo demás,
+ * y no en el día del reloj de quien lo descarga.
+ */
+export function hoy(marca: number = Date.now()): string {
   const partes = new Intl.DateTimeFormat("en-CA", {
     timeZone: ZONA_NEGOCIO,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date());
+  }).formatToParts(new Date(marca));
 
   const parte = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? "";
   return `${parte("year")}-${parte("month")}-${parte("day")}`;

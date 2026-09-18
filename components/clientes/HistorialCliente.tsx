@@ -24,10 +24,14 @@ import { cn } from "@/lib/cn";
  * secuencia —se le llamó, se le mandó propuesta, se cerró la venta—, y tres
  * listas separadas obligan a reconstruirla de cabeza.
  *
- * Pide sus tres consultas él mismo, como hace `SeguimientosPendientes`. La de
+ * Pide sus cuatro consultas él mismo, como hace `SeguimientosPendientes`. La de
  * seguimientos es literalmente la misma llamada que hace esa tarjeta —misma
  * función, mismos argumentos—, así que Convex las resuelve con una sola
  * suscripción y esto no cuesta nada.
+ *
+ * La cuarta es el correo del buzón de la empresa (JES-103). Entra por la misma
+ * puerta que las demás y se pinta con la misma fila: para quien mira la ficha,
+ * un correo es un contacto más.
  */
 
 const ICONO_CANAL: Record<CanalInteraccion, LucideIcon> = {
@@ -47,9 +51,13 @@ export function HistorialCliente({ clienteId }: { clienteId: Id<"clientes"> }) {
   const interacciones = useQuery(api.interacciones.listByCliente, { clienteId });
   const ventas = useQuery(api.ventas.listByCliente, { clienteId });
   const seguimientos = useQuery(api.seguimientos.listByCliente, { clienteId });
+  const correos = useQuery(api.correos.listByCliente, { clienteId });
 
   const cargando =
-    interacciones === undefined || ventas === undefined || seguimientos === undefined;
+    interacciones === undefined ||
+    ventas === undefined ||
+    seguimientos === undefined ||
+    correos === undefined;
 
   return (
     <Card title="Historial">
@@ -69,7 +77,9 @@ export function HistorialCliente({ clienteId }: { clienteId: Id<"clientes"> }) {
           ))}
         </div>
       ) : (
-        <Lista entradas={construirHistorial(interacciones, ventas, seguimientos)} />
+        <Lista
+          entradas={construirHistorial(interacciones, ventas, seguimientos, correos)}
+        />
       )}
     </Card>
   );
