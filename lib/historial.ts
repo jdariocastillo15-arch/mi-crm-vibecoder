@@ -6,17 +6,17 @@ import { CANAL_INTERACCION } from "./constants";
  * Diseño: DESING/design_handoff_crm_pwa/CRM Shell.dc.html, líneas 959–971
  * (cómo se normaliza cada tipo) y 1044–1047 (la mezcla y el orden).
  *
- * Tres cosas que pasan en momentos distintos —lo que se habló, lo que se vendió
- * y lo que se hizo— contadas como una sola historia. El diseño lo resuelve
- * normalizando los tres a la misma forma antes de ordenarlos, y aquí se hace
- * igual: mezclar tipos distintos dentro del JSX obligaría a que cada rama
- * supiera de las otras dos.
+ * Cuatro cosas que pasan en momentos distintos —lo que se habló, lo que se
+ * vendió, lo que se hizo y lo que se escribió por correo (JES-103)— contadas
+ * como una sola historia. El diseño lo resuelve normalizándolas a la misma
+ * forma antes de ordenarlas, y aquí se hace igual: mezclar tipos distintos
+ * dentro del JSX obligaría a que cada rama supiera de las demás.
  *
  * Sin JSX y sin tipos de Convex, como `lib/seguimientos.ts`: así esto se puede
  * leer, razonar y cambiar sin una pantalla alrededor.
  */
 
-export type TipoHistorial = "interaccion" | "venta" | "seguimiento";
+export type TipoHistorial = "interaccion" | "venta" | "seguimiento" | "correo";
 
 export type EntradaHistorial = {
   clave: string;
@@ -26,9 +26,9 @@ export type EntradaHistorial = {
   titulo: string;
   /** Vacío cuando no hay nada que añadir al título: lo dice ya la etiqueta. */
   detalle: string;
-  /** "Registrado por X" · "Responsable: X". Vacío si no se sabe quién. */
+  /** "Registrado por X" · "Responsable: X" · "De: x@y". Vacío si no se sabe. */
   autoria: string;
-  /** Solo interacciones: decide el icono. */
+  /** Interacciones y correos: decide el icono. */
   canal?: CanalInteraccion;
   /** Solo ventas: decide la etiqueta, el color del círculo y el del importe. */
   estado?: EstadoVenta;
@@ -67,6 +67,17 @@ type Seguimiento = {
   responsableNombre: string | null;
 };
 
+/** Sin `_creationTime`: un correo se ordena por cuándo se mandó. Ver abajo. */
+type Correo = {
+  _id: string;
+  direccion: "entrante" | "saliente";
+  contraparte: string;
+  asunto: string;
+  fragmento: string;
+  fecha: string;
+  recibidoEn: number;
+};
+
 /** Con nombre, la línea; sin nombre, nada. Nunca "Registrado por null". */
 function autoriaDe(prefijo: string, nombre: string | null): string {
   return nombre ? `${prefijo}${nombre}` : "";
@@ -89,6 +100,7 @@ export function construirHistorial(
   interacciones: Interaccion[],
   ventas: Venta[],
   seguimientos: Seguimiento[],
+  correos: Correo[],
 ): EntradaHistorial[] {
   // Cada entrada viaja emparejada con la antigüedad de su documento, que hace
   // falta para desempatar y no para pintar. Emparejarlas en vez de meter el
@@ -139,6 +151,25 @@ export function construirHistorial(
           autoria: autoriaDe("Responsable: ", s.responsableNombre),
         },
       })),
+
+    ...correos.map((c) => ({
+      // Aquí el desempate NO es `_creationTime`: eso es cuándo se descargó el
+      // correo, y en una importación de treinta días es casi el mismo instante
+      // para todos. Lo que ordena es cuándo se mandó.
+      creado: c.recibidoEn,
+      entrada: {
+        clave: `correo-${c._id}`,
+        fecha: c.fecha,
+        tipo: "correo" as const,
+        // Un correo sin asunto existe, y dejar el título vacío partiría la fila.
+        titulo: c.asunto.length > 0 ? c.asunto : "(sin asunto)",
+        detalle: c.fragmento,
+        // Con quién, que es lo que aquí hace de autoría: el correo no lo anotó
+        // nadie del equipo.
+        autoria: `${c.direccion === "saliente" ? "Para: " : "De: "}${c.contraparte}`,
+        canal: "email" as const,
+      },
+    })),
   ];
 
   return conCreacion
