@@ -21,12 +21,19 @@ export default defineConfig({
   // cinco segundos que da Playwright por defecto.
   expect: { timeout: 10_000 },
   reporter: [["list"], ["html", { open: "never" }]],
-  // Con el navegador A LA VISTA y una prueba detrás de otra, para poder seguir
-  // en la ventana lo que se está probando. Lo pidió el dueño como regla. En
-  // integración continua no hay pantalla, así que ahí corre sin ventana.
-  workers: process.env.CI ? undefined : 1,
+  // SIN VENTANA, siempre. Lo pidió el dueño como regla el 2026-09-18, en lugar
+  // de la anterior, que era verlas correr: una batería que abre ventanas
+  // interrumpe lo que haya en pantalla. Para mirar una prueba por dentro está
+  // `npm run test:e2e:ui`, que se teclea a propósito.
+  //
+  // Y de una en una, que es como se han ejecutado siempre. Repartirlas entre
+  // varios trabajadores iría más rápido y no se le ve problema —el único caso
+  // delicado, `sesion-terminada.spec.ts`, ya usa sus propias sesiones para no
+  // tumbar la compartida—, pero eso no lo ha corrido nadie todavía: es mejora
+  // aparte, no un efecto secundario de esconder la ventana.
+  workers: 1,
   use: {
-    headless: Boolean(process.env.CI),
+    headless: true,
     baseURL: URL_BASE,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
