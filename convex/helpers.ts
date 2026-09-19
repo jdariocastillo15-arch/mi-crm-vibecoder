@@ -255,14 +255,21 @@ export async function asignarEmail(
   emailNuevo: string,
 ): Promise<{ email: string; cambiado: boolean; contrasenaMovida: boolean }> {
   const email = normalizaEmail(emailNuevo);
-  if (!esEmailValido(email)) throw new Error("Introduce un email válido");
+  // Los dos rechazos que una pantalla distingue van como motivo y no como
+  // texto: en producción el mensaje de un `Error` no llega. Ver JES-97 y la
+  // lista de `convex/users.ts`.
+  if (!esEmailValido(email)) throw new ConvexError({ motivo: "email_invalido" });
 
   const usuario = await ctx.db.get(usuarioId);
   if (usuario === null) throw new Error("Ese usuario ya no existe");
 
   const ocupado = await buscarUsuarioPorEmail(ctx.db, email);
   if (ocupado !== null && ocupado._id !== usuarioId) {
-    throw new Error(`Ya hay otra persona en el equipo con ${email}`);
+    // MISMO motivo que el duplicado del alta (`users.ts#crearUsuario`), aunque
+    // el camino sea otro: para quien lo lee es el mismo problema y el mismo
+    // sitio donde corregirlo. Que antes fueran dos textos distintos es lo que
+    // obligaba a la pantalla a mantener una lista de cadenas.
+    throw new ConvexError({ motivo: "email_duplicado" });
   }
 
   const cambiado = usuario.email !== email;

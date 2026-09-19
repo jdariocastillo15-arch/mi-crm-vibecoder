@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { rolUsuario } from "./schema";
 import {
   requireUser,
@@ -24,6 +24,35 @@ import {
  * `helpers.ts#asignarEmail`, que normaliza, exige unicidad y arrastra la
  * credencial de contraseña.
  */
+
+/**
+ * Los rechazos que una pantalla tiene que DISTINGUIR — JES-97.
+ *
+ * Van como código y no como texto porque **el mensaje de un `Error` no llega al
+ * navegador en producción**: Convex no revela nada de los errores no
+ * controlados y lo sustituye por un escueto «Server Error». El `data` de un
+ * `ConvexError` sí viaja, y por ahí va el motivo; el texto lo pone la pantalla.
+ *
+ * Mismo criterio y misma forma que `convex/cuenta.ts`, donde está la
+ * explicación larga. Solo entran aquí los casos en los que la pantalla hace
+ * algo distinto según cuál sea: el resto de `throw new Error` de este fichero
+ * se quedan como están, porque todos acaban en el mismo aviso genérico y
+ * convertirlos no cambiaría una sola palabra de lo que se lee.
+ *
+ * Las listas equivalentes están en `components/equipo/DialogoEliminar.tsx` y
+ * `components/equipo/OverlayUsuario.tsx`. No se comparte un módulo a propósito:
+ * importar desde `convex/` traería al navegador todo el servidor. Un motivo que
+ * la pantalla no reconozca cae en su genérico, así que separarlas degrada bien.
+ */
+type MotivoDelRechazo =
+  | "cuenta_propia"
+  | "ultima_duena"
+  | "email_duplicado"
+  | "email_invalido";
+
+function rechaza(motivo: MotivoDelRechazo): never {
+  throw new ConvexError({ motivo });
+}
 
 /**
  * El usuario de la sesión. Devuelve null si nadie ha entrado; si hay identidad
@@ -149,9 +178,7 @@ export const eliminarUsuario = mutation({
     const actual = await requirePropietaria(ctx);
 
     // Protección 1: nadie puede borrarse a sí mismo.
-    if (actual._id === usuarioId) {
-      throw new Error("No puedes eliminar tu propia cuenta");
-    }
+    if (actual._id === usuarioId) rechaza("cuenta_propia");
 
     // Protección 2: el equipo nunca puede quedarse sin Dueña.
     const objetivo = await ctx.db.get(usuarioId);
@@ -217,7 +244,7 @@ export const crearUsuario = mutation({
 
     const nombre = name.trim();
     if (nombre.length === 0) throw new Error("Indica un nombre");
-    if (!esEmailValido(email)) throw new Error("Introduce un email válido");
+    if (!esEmailValido(email)) rechaza("email_invalido");
 
     // Si ese correo es de alguien que se dio de baja, se REACTIVA su ficha en
     // vez de fallar por duplicado. Es lo que espera cualquiera al volver a
@@ -225,9 +252,7 @@ export const crearUsuario = mutation({
     // correo para siempre. Recupera su historial, que es lo suyo.
     const existente = await buscarUsuarioPorEmail(ctx.db, normalizaEmail(email));
     if (existente !== null) {
-      if (existente.bajaEn === undefined) {
-        throw new Error("Ya hay alguien con ese email");
-      }
+      if (existente.bajaEn === undefined) rechaza("email_duplicado");
       await ctx.db.patch(existente._id, {
         name: nombre,
         rol,
@@ -445,7 +470,5 @@ async function assertQuedaAlgunaDuena(ctx: MutationCtx, excepto: Id<"users">) {
     (u) =>
       u.rol === "propietaria" && u._id !== excepto && u.bajaEn === undefined,
   );
-  if (duenas.length === 0) {
-    throw new Error("El equipo no puede quedarse sin nadie que lo lleve");
-  }
+  if (duenas.length === 0) rechaza("ultima_duena");
 }
