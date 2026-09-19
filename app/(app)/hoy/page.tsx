@@ -110,20 +110,22 @@ export default function HoyPage() {
   function completar(fila: FilaSeguimiento) {
     // Sin `await` antes del aviso: el cambio y su confirmación son instantáneos,
     // y el error, si lo hay, llega después.
+    //
+    // Los dos textos los pone el cliente, no el servidor: en producción Convex
+    // oculta el mensaje de un error no controlado y llega «Server Error». El
+    // porqué, largo, está en `components/cuenta/OverlayEditarDatos.tsx`.
     const guardado = marcarHecho({ seguimientoId: fila._id });
 
     mostrar(AVISOS.seguimientoCompletado, {
       label: "Deshacer",
       onClick: () => {
-        deshacer({ seguimientoId: fila._id }).catch((e: unknown) =>
-          mostrarError(e instanceof Error ? e.message : "No se ha podido deshacer"),
+        deshacer({ seguimientoId: fila._id }).catch(() =>
+          mostrarError("No se ha podido deshacer"),
         );
       },
     });
 
-    guardado.catch((e: unknown) =>
-      mostrarError(e instanceof Error ? e.message : "No se ha podido guardar"),
-    );
+    guardado.catch(() => mostrarError("No se ha podido guardar"));
   }
 
   function abrirAccion(accion: AccionRapida) {

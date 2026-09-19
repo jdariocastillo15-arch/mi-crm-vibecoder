@@ -82,8 +82,11 @@ export function OverlayNuevoCliente({
         nota: form.nota.trim() || undefined,
       });
       onCreado(id);
-    } catch (e) {
-      mostrarError(e instanceof Error ? e.message : "No se ha podido guardar");
+    } catch {
+      // El texto lo pone el cliente, no el servidor: en producción Convex
+      // oculta el mensaje de un error no controlado y llega «Server Error».
+      // El porqué, largo, está en `components/cuenta/OverlayEditarDatos.tsx`.
+      mostrarError("No se ha podido guardar");
     } finally {
       setGuardando(false);
     }
