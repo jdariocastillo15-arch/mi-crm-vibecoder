@@ -133,7 +133,7 @@ export function ListaClientes() {
               type="button"
               aria-label="Limpiar búsqueda"
               onClick={() => setConsulta("")}
-              className="inline-flex size-9 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-2"
+              className="inline-flex size-11 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-2"
             >
               <X size={18} strokeWidth={1.5} aria-hidden />
             </button>

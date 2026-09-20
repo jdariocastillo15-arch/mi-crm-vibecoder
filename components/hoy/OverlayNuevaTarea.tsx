@@ -107,7 +107,7 @@ export function OverlayNuevaTarea({
           <button
             type="button"
             onClick={onNuevoCliente}
-            className="rounded-md px-1 text-sm font-medium text-primary"
+            className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-medium text-primary"
           >
             + Nuevo cliente
           </button>
