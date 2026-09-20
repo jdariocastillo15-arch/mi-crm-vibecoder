@@ -2,12 +2,45 @@
 
 import { useState } from "react";
 import { useMutation } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api";
 import { Overlay } from "@/components/ui/Overlay";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { AVISOS } from "@/lib/constants";
 import type { Persona } from "./ListaEquipo";
+
+/**
+ * Qué se le dice a quien topa con una de las dos protecciones — JES-97.
+ *
+ * LOS TEXTOS VIVEN AQUÍ, no en el servidor, porque **el mensaje de un `Error`
+ * no llega al navegador en producción**: Convex lo sustituye por «Server
+ * Error». Lo que sí viaja es el `data` de un `ConvexError`, y por ahí llega el
+ * motivo. La lista equivalente está en `convex/users.ts`; no se comparte un
+ * módulo a propósito, que importar desde `convex/` traería el servidor entero.
+ *
+ * Mismo patrón que `components/cuenta/OverlayCambiarContrasena.tsx`, donde está
+ * la explicación larga.
+ */
+const TEXTO_POR_MOTIVO: Record<string, string> = {
+  cuenta_propia: "No puedes eliminar tu propia cuenta",
+  ultima_duena: "El equipo no puede quedarse sin nadie que lo lleve",
+};
+
+/**
+ * Para todo lo demás: un motivo que no reconozcamos, o cualquier excepción que
+ * no sea nuestra —de la red, de la librería—, acaban aquí y no en un texto
+ * inventado.
+ */
+const GENERICO = "No se ha podido eliminar";
+
+/** El motivo que viaja en el `data`, si es que lo hay. */
+function motivoDe(error: unknown): string | null {
+  if (!(error instanceof ConvexError)) return null;
+  const datos = error.data as { motivo?: unknown } | null | undefined;
+  if (datos === null || typeof datos !== "object") return null;
+  return typeof datos.motivo === "string" ? datos.motivo : null;
+}
 
 /**
  * Confirmar que se saca a alguien del equipo — implementa parte de JES-70.
@@ -47,8 +80,9 @@ export function DialogoEliminar({
       );
       onCerrar();
     } catch (e) {
+      const motivo = motivoDe(e);
       mostrarError(
-        e instanceof Error ? e.message : "No se ha podido eliminar",
+        motivo === null ? GENERICO : (TEXTO_POR_MOTIVO[motivo] ?? GENERICO),
       );
     } finally {
       setEliminando(false);

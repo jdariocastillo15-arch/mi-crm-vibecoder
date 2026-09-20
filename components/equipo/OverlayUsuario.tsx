@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAction, useMutation } from "convex/react";
+import { ConvexError } from "convex/values";
 import { Mail } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Overlay } from "@/components/ui/Overlay";
@@ -31,28 +32,49 @@ import type { Persona } from "./ListaEquipo";
  */
 
 /**
- * ¿Este error del servidor va en el campo del correo?
+ * Qué se le dice a la persona según el motivo que manda el servidor — JES-97.
  *
- * El alta y la edición NO dan el mismo mensaje, y ahí estaba el fallo: buscar
- * la palabra «email» acertaba con «Ya hay alguien con ese email»
- * (`users.ts#crearUsuario`) y fallaba con «Ya hay otra persona en el equipo
- * con…» (`helpers.ts#asignarEmail`, que es por donde pasa la edición). El
- * duplicado quedaba rechazado igual —eso nunca estuvo en duda—, pero se
- * anunciaba en un aviso suelto en vez de junto al campo que hay que corregir.
+ * LOS TEXTOS VIVEN AQUÍ, no en el servidor, porque **el mensaje de un `Error`
+ * no llega al navegador en producción**: Convex lo sustituye por «Server
+ * Error». Lo que sí viaja es el `data` de un `ConvexError`, y por ahí llega el
+ * motivo.
  *
- * Esta es la lista de lo que el servidor dice sobre un correo. Si allí cambia
- * un mensaje, hay que tocar aquí: es el precio de que el servidor mande y de no
- * inventarse un protocolo de códigos de error solo para esto.
+ * Aquí antes había una lista de CADENAS que se comparaba contra el mensaje del
+ * servidor. Reconocía los dos textos del duplicado —el del alta y el de la
+ * edición, que son distintos— y por eso parecía correcta, pero en producción no
+ * hay mensaje que comparar: la lista no acertaba ninguno y el duplicado, que
+ * seguía rechazándose, se anunciaba en un aviso suelto en vez de junto al campo
+ * que hay que corregir. Con el motivo no hay nada que comparar, y el servidor
+ * puede redactar lo que quiera sin romper esta pantalla.
+ *
+ * La lista equivalente está en `convex/users.ts`. No se comparte un módulo a
+ * propósito: importar desde `convex/` traería al navegador todo el servidor.
  */
-const ERRORES_DE_CORREO = [
-  "ya hay otra persona en el equipo con",
-  "ya hay alguien con ese email",
-  "introduce un email válido",
-];
+const TEXTO_POR_MOTIVO: Record<string, string> = {
+  email_duplicado: "Ya hay alguien con ese email",
+  email_invalido: "Introduce un email válido",
+  ultima_duena: "El equipo no puede quedarse sin nadie que lo lleve",
+};
 
-function esErrorDeCorreo(mensaje: string): boolean {
-  const m = mensaje.toLowerCase();
-  return ERRORES_DE_CORREO.some((e) => m.includes(e));
+/**
+ * Los que van JUNTO al campo del correo, porque es ahí donde está el problema y
+ * donde se corrige. `ultima_duena` NO entra: eso no se arregla tocando el
+ * correo, sino el rol, así que va en el aviso general.
+ */
+const MOTIVOS_DEL_CAMPO = new Set(["email_duplicado", "email_invalido"]);
+
+/**
+ * Para todo lo demás: un motivo que no reconozcamos, o una excepción que no sea
+ * nuestra —de la red, de la librería—. Nunca un texto inventado.
+ */
+const GENERICO = "No se ha podido guardar";
+
+/** El motivo que viaja en el `data`, si es que lo hay. */
+function motivoDe(error: unknown): string | null {
+  if (!(error instanceof ConvexError)) return null;
+  const datos = error.data as { motivo?: unknown } | null | undefined;
+  if (datos === null || typeof datos !== "object") return null;
+  return typeof datos.motivo === "string" ? datos.motivo : null;
 }
 
 const OPCIONES_ROL: { valor: RolUsuario; etiqueta: string }[] = [
@@ -134,14 +156,17 @@ export function OverlayUsuario({
       );
       onCerrar();
     } catch (e) {
-      // El servidor es quien decide si el correo está repetido, y su mensaje se
-      // enseña EN EL CAMPO: es donde está el problema, no en una alerta suelta.
-      const mensaje =
-        e instanceof Error ? e.message : "No se ha podido guardar";
-      if (esErrorDeCorreo(mensaje)) {
-        setErrorServidor(mensaje);
+      // Lo del correo se enseña EN EL CAMPO, que es donde se corrige; lo demás,
+      // en un aviso. Lo decide el MOTIVO, no el texto del servidor, que en
+      // producción no llega.
+      const motivo = motivoDe(e);
+      const texto =
+        motivo === null ? GENERICO : (TEXTO_POR_MOTIVO[motivo] ?? GENERICO);
+
+      if (motivo !== null && MOTIVOS_DEL_CAMPO.has(motivo)) {
+        setErrorServidor(texto);
       } else {
-        mostrarError(mensaje);
+        mostrarError(texto);
       }
     } finally {
       setGuardando(false);
