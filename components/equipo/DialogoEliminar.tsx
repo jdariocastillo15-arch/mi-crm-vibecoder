@@ -81,8 +81,13 @@ export function DialogoEliminar({
       onCerrar();
     } catch (e) {
       const motivo = motivoDe(e);
+      // La clave se comprueba como PROPIA: una búsqueda a secas encuentra
+      // también lo heredado de `Object.prototype`, y un motivo llamado
+      // `toString` devolvería una función, que no es nula y se colaría.
       mostrarError(
-        motivo === null ? GENERICO : (TEXTO_POR_MOTIVO[motivo] ?? GENERICO),
+        motivo !== null && Object.hasOwn(TEXTO_POR_MOTIVO, motivo)
+          ? TEXTO_POR_MOTIVO[motivo]
+          : GENERICO,
       );
     } finally {
       setEliminando(false);

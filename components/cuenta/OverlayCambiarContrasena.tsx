@@ -138,7 +138,13 @@ export function OverlayCambiarContrasena({
       onCerrar();
     } catch (e) {
       const motivo = motivoDe(e);
-      const texto = motivo === null ? GENERICO : (TEXTO_POR_MOTIVO[motivo] ?? GENERICO);
+      // La clave se comprueba como PROPIA: una búsqueda a secas encuentra
+      // también lo heredado de `Object.prototype`, y un motivo llamado
+      // `toString` devolvería una función, que no es nula y se colaría.
+      const texto =
+        motivo !== null && Object.hasOwn(TEXTO_POR_MOTIVO, motivo)
+          ? TEXTO_POR_MOTIVO[motivo]
+          : GENERICO;
 
       if (motivo !== null && MOTIVOS_DEL_CAMPO.has(motivo)) {
         setErrorServidor(texto);

@@ -160,8 +160,13 @@ export function OverlayUsuario({
       // en un aviso. Lo decide el MOTIVO, no el texto del servidor, que en
       // producción no llega.
       const motivo = motivoDe(e);
+      // La clave se comprueba como PROPIA: una búsqueda a secas encuentra
+      // también lo heredado de `Object.prototype`, y un motivo llamado
+      // `toString` devolvería una función, que no es nula y se colaría.
       const texto =
-        motivo === null ? GENERICO : (TEXTO_POR_MOTIVO[motivo] ?? GENERICO);
+        motivo !== null && Object.hasOwn(TEXTO_POR_MOTIVO, motivo)
+          ? TEXTO_POR_MOTIVO[motivo]
+          : GENERICO;
 
       if (motivo !== null && MOTIVOS_DEL_CAMPO.has(motivo)) {
         setErrorServidor(texto);
