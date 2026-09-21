@@ -321,13 +321,13 @@ export default function LoginPage({
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-bg p-6">
-      <div className="flex w-full max-w-[400px] flex-col gap-[22px]">
+      <div className="flex w-full max-w-100 flex-col gap-5.5">
         <div className="flex items-center justify-center gap-2.5">
           <Logo size={34} />
           <span className="text-xl font-semibold text-text">Vibe CRM</span>
         </div>
 
-        <div className="flex flex-col gap-[18px] rounded-xl border border-border bg-surface px-6 py-7 shadow-sm">
+        <div className="flex flex-col gap-4.5 rounded-xl border border-border bg-surface px-6 py-7 shadow-sm">
           <div className="flex flex-col gap-1">
             <h1 className="text-xl font-semibold text-text">
               {encabezado.titulo}
@@ -417,7 +417,7 @@ export default function LoginPage({
                     verPassword ? "Ocultar contraseña" : "Mostrar contraseña"
                   }
                   aria-pressed={verPassword}
-                  className="absolute top-[30px] right-1.5 inline-flex size-11 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-2"
+                  className="absolute top-7.5 right-1.5 inline-flex size-11 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-2"
                 >
                   {verPassword ? (
                     <EyeOff size={18} strokeWidth={1.5} aria-hidden />
@@ -487,7 +487,7 @@ export default function LoginPage({
                       : "Mostrar contraseña"
                   }
                   aria-pressed={verPasswordNueva}
-                  className="absolute top-[30px] right-1.5 inline-flex size-11 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-2"
+                  className="absolute top-7.5 right-1.5 inline-flex size-11 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-2"
                 >
                   {verPasswordNueva ? (
                     <EyeOff size={18} strokeWidth={1.5} aria-hidden />

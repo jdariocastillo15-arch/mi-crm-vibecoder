@@ -31,8 +31,8 @@ export function Skeleton({
  */
 export function SkeletonRow() {
   return (
-    <div className="flex items-center gap-3 border-b border-border px-[18px] py-3.5 last:border-b-0">
-      <Skeleton width={40} height={40} radius={9999} />
+    <div className="flex items-center gap-3 border-b border-border px-4.5 py-3.5 last:border-b-0">
+      <Skeleton width={40} height={40} radius="var(--radius-full)" />
       <div className="flex flex-1 flex-col gap-2">
         <Skeleton width="38%" height={13} />
         <Skeleton width="60%" height={11} />

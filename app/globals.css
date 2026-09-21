@@ -11,7 +11,11 @@
 /* Modo oscuro por atributo en la raíz: <html data-theme="dark"> */
 @custom-variant dark ([data-theme="dark"] &);
 
-@theme {
+/* `static` obliga a Tailwind a emitir TODOS los tokens al CSS servido. Sin él
+   poda los que no tienen consumidores: las rampas --color-green-* y
+   --color-neutral-* no llegaban al navegador aunque estuvieran escritas aquí,
+   y el criterio 1 de JES-40 pide que estén disponibles en la aplicación. */
+@theme static {
   /* ---- Escala cruda: verde ---- */
   --color-green-50: #f0fdf4;
   --color-green-100: #dcfce7;
@@ -92,6 +96,11 @@
   --text-3xl: 1.875rem;
   --text-4xl: 2.25rem;
 
+  /* 400 cuerpo · 500 etiquetas · 600 títulos. El paquete pide evitar el 700. */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
   --tracking-tight: -0.011em;
   --tracking-caps: 0.06em;
 
@@ -107,6 +116,31 @@
   --radius-lg: 8px;
   --radius-xl: 10px;
   --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* ---- Layout y controles (nombres del paquete de diseño) ---- */
+  /* 860 y no los 1200 de tokens/spacing.css: el README del paquete dice «max
+     1200px (en este prototipo 860px)», y los 860 son criterio de aceptación
+     de JES-42, ya validado. */
+  --content-max: 860px;
+  --control-h: 48px;
+  --control-h-compact: 44px;
+  --touch-min: var(--control-h-compact);
+
+  /* Alias con el prefijo que Tailwind necesita para generar la utilidad. */
+  --max-width-content-max: var(--content-max);
+  --height-control: var(--control-h);
+  --height-control-compact: var(--control-h-compact);
+  --size-control: var(--control-h);
+  --size-control-compact: var(--control-h-compact);
+
+  /* Medidas que no son múltiplos de la escala y antes se escribían dentro del
+     componente: la hoja móvil, el área segura del móvil y el botón flotante. */
+  --max-height-sheet: 92vh;
+  --max-height-sheet-desktop: 90vh;
+  --padding-safe-bottom: env(safe-area-inset-bottom);
+  --padding-sheet-footer: max(1rem, env(safe-area-inset-bottom));
+  --inset-fab: calc(var(--spacing) * 19 + env(safe-area-inset-bottom));
 
   /* ---- Sombras (muy sutiles, tinte frío) ---- */
   --shadow-xs: 0 1px 2px rgba(16, 24, 32, 0.04);
@@ -114,18 +148,25 @@
   --shadow-md: 0 2px 4px rgba(16, 24, 32, 0.05), 0 4px 12px rgba(16, 24, 32, 0.06);
   --shadow-lg: 0 8px 24px rgba(16, 24, 32, 0.1);
 
+  /* ---- Foco ---- */
+  /* Los dos var() se resuelven al usarse, así que vale en claro y en oscuro. */
+  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-focus);
+
   /* ---- Movimiento ---- */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --default-transition-duration: 150ms;
-  --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --default-transition-duration: var(--duration-fast);
+  --default-transition-timing-function: var(--ease-standard);
 
   /* ---- Animaciones del prototipo ---- */
+  /* El deslizamiento hacia arriba dura 200ms a propósito: es la hoja móvil
+     entrando, no una transición «fast». Los otros tres sí lo son. */
   --animate-vibe-spin: vibe-spin 0.7s linear infinite;
   --animate-vibe-pulse: vibe-pulse 1.4s ease-in-out infinite;
-  --animate-vibe-slide-up: vibe-slide-up 200ms cubic-bezier(0.2, 0, 0, 1);
-  --animate-vibe-pop-in: vibe-pop-in 150ms cubic-bezier(0.2, 0, 0, 1);
-  --animate-vibe-fade-in: vibe-fade-in 150ms cubic-bezier(0.2, 0, 0, 1);
-  --animate-vibe-slide-left: vibe-slide-left 150ms cubic-bezier(0.2, 0, 0, 1);
+  --animate-vibe-slide-up: vibe-slide-up 200ms var(--ease-standard);
+  --animate-vibe-pop-in: vibe-pop-in var(--duration-fast) var(--ease-standard);
+  --animate-vibe-fade-in: vibe-fade-in var(--duration-fast) var(--ease-standard);
+  --animate-vibe-slide-left: vibe-slide-left var(--duration-fast) var(--ease-standard);
 
   @keyframes vibe-spin {
     to { transform: rotate(360deg); }
@@ -226,7 +267,7 @@
   /* Foco: anillo verde de 2px con separación. Nunca quitarlo sin sustituto. */
   :focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-focus);
+    box-shadow: var(--focus-ring);
     border-radius: var(--radius-md);
   }
 
@@ -236,7 +277,7 @@
   }
   ::-webkit-scrollbar-thumb {
     background: var(--color-border-strong);
-    border-radius: 9999px;
+    border-radius: var(--radius-full);
     border: 3px solid var(--color-bg);
   }
 
@@ -254,5 +295,5 @@
 }
 
 @utility focus-ring {
-  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-focus);
+  box-shadow: var(--focus-ring);
 }

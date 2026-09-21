@@ -213,7 +213,7 @@ export function ListaClientes() {
         type="button"
         aria-label="Nuevo cliente"
         onClick={abrirAlta}
-        className="fixed right-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-50 inline-flex size-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-lg transition-colors hover:bg-primary-hover md:hidden"
+        className="fixed right-4 bottom-fab z-50 inline-flex size-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-lg transition-colors hover:bg-primary-hover md:hidden"
       >
         <Plus size={26} strokeWidth={1.5} aria-hidden />
       </button>

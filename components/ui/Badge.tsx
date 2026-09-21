@@ -31,13 +31,13 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-3 py-[5px] text-[13px] font-medium whitespace-nowrap",
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1.25 text-[13px] font-medium whitespace-nowrap",
         t.fondo,
         t.texto,
         className,
       )}
     >
-      {dot && <span aria-hidden className={cn("size-[7px] shrink-0 rounded-full", t.punto)} />}
+      {dot && <span aria-hidden className={cn("size-1.75 shrink-0 rounded-full", t.punto)} />}
       {children}
     </span>
   );

@@ -50,7 +50,7 @@ export function Button({
       aria-busy={loading || undefined}
       className={cn(
         "inline-flex items-center justify-center gap-2 rounded-md px-5 text-[15px] transition-colors",
-        size === "default" ? "h-12" : "h-11",
+        size === "default" ? "h-control" : "h-control-compact",
         fullWidth && "w-full",
         VARIANTES[variant],
         inactivo &&

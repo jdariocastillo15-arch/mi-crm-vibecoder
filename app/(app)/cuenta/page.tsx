@@ -54,7 +54,7 @@ export default function CuentaPage() {
       <Card>
         <div className="flex items-center gap-4">
           <Avatar name={nombre || "?"} size={56} />
-          <div className="flex min-w-0 flex-col gap-[7px]">
+          <div className="flex min-w-0 flex-col gap-1.75">
             <span className="truncate text-[19px] font-semibold tracking-tight text-text">
               {nombre || "Sin nombre"}
             </span>
@@ -98,7 +98,7 @@ export default function CuentaPage() {
             // El texto se queda en "no has establecido contraseña" y NO dice
             // por qué puerta entra: `tieneContrasena` habla de la credencial,
             // no del proveedor. Quien entra por código tampoco la tiene.
-            <p className="border-t border-border px-[18px] py-3.5 text-[13px] text-text-muted">
+            <p className="border-t border-border px-4.5 py-3.5 text-[13px] text-text-muted">
               Todavía no has establecido una contraseña. Puedes hacerlo desde la
               pantalla de acceso, poniendo tu correo y pidiendo el código.
             </p>
@@ -165,7 +165,7 @@ function FilaOpcion({
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-12 w-full cursor-pointer items-center gap-3 border-b border-border px-[18px] py-3.5 text-left text-[15px] text-text transition-colors last:border-b-0 hover:bg-surface-2 focus-visible:shadow-none focus-visible:[outline:2px_solid_var(--color-focus)] focus-visible:[outline-offset:-3px]"
+      className="flex min-h-12 w-full cursor-pointer items-center gap-3 border-b border-border px-4.5 py-3.5 text-left text-[15px] text-text transition-colors last:border-b-0 hover:bg-surface-2 focus-visible:shadow-none focus-visible:[outline:2px_solid_var(--color-focus)] focus-visible:[outline-offset:-3px]"
     >
       <span className="shrink-0 text-text-muted">{icono}</span>
       <span className="min-w-0 flex-1">{children}</span>
@@ -232,7 +232,7 @@ function SinSesion() {
         <h2 className="text-[15px] font-semibold text-text">
           Tu sesión ha terminado
         </h2>
-        <p className="max-w-[280px] text-[13px] text-text-muted">
+        <p className="max-w-70 text-[13px] text-text-muted">
           Vuelve a entrar para seguir usando el CRM.
         </p>
         <button

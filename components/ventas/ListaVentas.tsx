@@ -70,14 +70,14 @@ function Fila({ venta }: { venta: Venta }) {
       <span
         aria-hidden
         className={cn(
-          "inline-flex size-[34px] shrink-0 items-center justify-center rounded-full",
+          "inline-flex size-8.5 shrink-0 items-center justify-center rounded-full",
           CIRCULO_VENTA[venta.estado],
         )}
       >
         <TrendingUp size={18} strokeWidth={1.5} />
       </span>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.75">
         <span className="truncate text-[15px] font-medium text-text">
           {venta.concepto}
         </span>
@@ -93,7 +93,7 @@ function Fila({ venta }: { venta: Venta }) {
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-col items-end gap-[3px]">
+      <div className="flex shrink-0 flex-col items-end gap-0.75">
         <span
           className={cn(
             "font-mono text-[15px] font-semibold tabular-nums whitespace-nowrap",
@@ -127,7 +127,7 @@ function Fila({ venta }: { venta: Venta }) {
 
 function clases(interactiva: boolean): string {
   return cn(
-    "flex w-full items-center gap-3 border-b border-border px-[18px] py-[13px] text-left last:border-b-0",
+    "flex w-full items-center gap-3 border-b border-border px-4.5 py-3.25 text-left last:border-b-0",
     interactiva && "cursor-pointer transition-colors hover:bg-surface-2",
     // El anillo de foco del sistema es una sombra que sobresale 4px, y la
     // tarjeta que envuelve la lista recorta lo que se salga de ella. Se cambia
@@ -153,9 +153,9 @@ export function ListaVentasCargando() {
       {FILAS_FANTASMA.map((i) => (
         <div
           key={i}
-          className="flex items-center gap-3 border-b border-border px-[18px] py-[13px] last:border-b-0"
+          className="flex items-center gap-3 border-b border-border px-4.5 py-3.25 last:border-b-0"
         >
-          <Skeleton width={34} height={34} radius={9999} />
+          <Skeleton width={34} height={34} radius="var(--radius-full)" />
           <div className="flex flex-1 flex-col gap-2">
             <Skeleton width="42%" height={13} />
             <Skeleton width="58%" height={11} />
