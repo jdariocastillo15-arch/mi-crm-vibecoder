@@ -36,7 +36,7 @@ export function IconButton({
       {...props}
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-md transition-colors",
-        size === "default" ? "size-12" : "size-11",
+        size === "default" ? "size-control" : "size-control-compact",
         VARIANTES[variant],
         props.disabled && "cursor-not-allowed text-text-subtle hover:bg-transparent",
         className,

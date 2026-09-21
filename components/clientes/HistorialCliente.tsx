@@ -68,7 +68,7 @@ export function HistorialCliente({ clienteId }: { clienteId: Id<"clientes"> }) {
         <div className="flex flex-col">
           {FILAS_FANTASMA.map((i) => (
             <div key={i} className="flex items-start gap-3 border-t border-border py-3">
-              <Skeleton width={34} height={34} radius={9999} />
+              <Skeleton width={34} height={34} radius="var(--radius-full)" />
               <div className="flex flex-1 flex-col gap-2 pt-1">
                 <Skeleton width="45%" height={13} />
                 <Skeleton width="70%" height={11} />
@@ -131,7 +131,7 @@ function Fila({ entrada }: { entrada: EntradaHistorial }) {
       <span
         aria-hidden
         className={cn(
-          "inline-flex size-[34px] shrink-0 items-center justify-center rounded-full",
+          "inline-flex size-8.5 shrink-0 items-center justify-center rounded-full",
           circulo,
         )}
       >
@@ -161,7 +161,7 @@ function Fila({ entrada }: { entrada: EntradaHistorial }) {
         )}
       </div>
 
-      <div className="flex shrink-0 flex-col items-end gap-[3px]">
+      <div className="flex shrink-0 flex-col items-end gap-0.75">
         {entrada.importe !== undefined && entrada.estado !== undefined && (
           <span
             className={cn(

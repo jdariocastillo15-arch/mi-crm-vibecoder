@@ -45,7 +45,7 @@ export default function ErrorDeLaAplicacion({
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-bg p-6">
-      <div className="w-full max-w-[400px]">
+      <div className="w-full max-w-100">
         <Card>
           {sinSesion ? (
             <div className="flex flex-col items-center gap-2 px-3 py-6 text-center">
@@ -53,7 +53,7 @@ export default function ErrorDeLaAplicacion({
               <h1 className="text-[15px] font-semibold text-text">
                 Tu sesión ha terminado
               </h1>
-              <p className="max-w-[280px] text-[13px] text-text-muted">
+              <p className="max-w-70 text-[13px] text-text-muted">
                 Te llevamos al acceso para que vuelvas a entrar.
               </p>
             </div>
@@ -68,7 +68,7 @@ export default function ErrorDeLaAplicacion({
               <h1 className="text-[15px] font-semibold text-text">
                 Algo ha fallado
               </h1>
-              <p className="max-w-[280px] text-[13px] text-text-muted">
+              <p className="max-w-70 text-[13px] text-text-muted">
                 No se ha podido cargar esta pantalla. Vuelve a intentarlo.
               </p>
               <div className="mt-2 flex gap-2.5">

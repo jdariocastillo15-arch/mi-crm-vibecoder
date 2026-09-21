@@ -72,7 +72,7 @@ export function ListaEquipo({
             <div
               key={persona._id}
               className={
-                "flex items-center gap-3 px-[18px] py-3" +
+                "flex items-center gap-3 px-4.5 py-3" +
                 (i < personas.length - 1 ? " border-b border-border" : "")
               }
             >

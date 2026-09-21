@@ -36,7 +36,7 @@ export function ListRow({
   const interactiva = Boolean(href || onClick);
 
   const clases = cn(
-    "flex w-full items-center gap-3 border-b border-border px-[18px] py-3.5 text-left last:border-b-0",
+    "flex w-full items-center gap-3 border-b border-border px-4.5 py-3.5 text-left last:border-b-0",
     interactiva && "cursor-pointer transition-colors hover:bg-surface-2",
     // El anillo de foco del sistema es una sombra que sobresale 4px, y la
     // tarjeta que envuelve la lista recorta lo que se salga de ella. Para las

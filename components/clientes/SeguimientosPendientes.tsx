@@ -139,7 +139,7 @@ function Fila({
   const atrasado = clasificar(seguimiento.vence) === "atrasado";
 
   return (
-    <div className="flex items-center gap-3 py-[11px]">
+    <div className="flex items-center gap-3 py-2.75">
       <Checkbox
         marcado={false}
         aria-label={`Marcar como hecho: ${seguimiento.accion}`}

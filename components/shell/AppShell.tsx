@@ -163,7 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <div className="mx-auto w-full max-w-[860px] px-4 pt-4 pb-8 md:px-8 md:pt-7 md:pb-14">
+          <div className="mx-auto w-full max-w-content-max px-4 pt-4 pb-8 md:px-8 md:pt-7 md:pb-14">
             {children}
           </div>
         </main>
@@ -172,7 +172,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {!pantallaCompleta && (
           <nav
             aria-label="Navegación principal"
-            className="flex shrink-0 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
+            className="flex shrink-0 border-t border-border bg-surface pb-safe-bottom md:hidden"
           >
             {destinos.map((d) => {
               const activo = pathname.startsWith(d.href);

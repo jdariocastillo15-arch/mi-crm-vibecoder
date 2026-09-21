@@ -118,7 +118,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {aviso && (
           <div
             className={cn(
-              "pointer-events-auto flex w-full max-w-[440px] items-center gap-2.5",
+              "pointer-events-auto flex w-full max-w-110 items-center gap-2.5",
               "rounded-xl px-4 py-3 shadow-lg animate-vibe-slide-up md:w-auto",
               aviso.tono === "error" ? "bg-error text-on-primary" : "bg-text text-bg",
             )}

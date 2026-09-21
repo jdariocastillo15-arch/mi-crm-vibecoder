@@ -188,7 +188,7 @@ export function Chips<T extends string>({
                   ? cn(
                       // El borde transparente de las inactivas reserva ya el
                       // sitio del anillo, para que nada se mueva al elegir.
-                      "rounded-full border-2 p-[3px]",
+                      "rounded-full border-2 p-0.75",
                       // El anillo se pinta con `outline` y no con `box-shadow`
                       // como en el diseño: el foco global ES un `box-shadow`
                       // (`app/globals.css`), y una utilidad de sombra le gana

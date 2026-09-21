@@ -171,8 +171,8 @@ export function Overlay({
           style={arrastre > 0 ? { transform: `translateY(${arrastre}px)` } : undefined}
           className={cn(
             "flex w-full flex-col overflow-hidden bg-surface shadow-lg",
-            "max-h-[92vh] rounded-t-2xl animate-vibe-slide-up",
-            "md:max-h-[90vh] md:w-[480px] md:rounded-xl md:animate-vibe-pop-in",
+            "max-h-sheet rounded-t-2xl animate-vibe-slide-up",
+            "md:max-h-sheet-desktop md:w-120 md:rounded-xl md:animate-vibe-pop-in",
           )}
         >
           {/* Tirador: en móvil es el asa del gesto; en escritorio no pinta nada. */}
@@ -231,7 +231,7 @@ export function Overlay({
           ) : onGuardar ? (
             <div
               data-pie
-              className="flex shrink-0 gap-2.5 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+              className="flex shrink-0 gap-2.5 border-t border-border p-4 pb-sheet-footer"
             >
               <Button variant="secondary" fullWidth onClick={onCerrar}>
                 Cancelar

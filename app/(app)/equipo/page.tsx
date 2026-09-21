@@ -60,7 +60,7 @@ export default function EquipoPage() {
   return (
     <div className="flex flex-col gap-4">
       <header className="flex items-end justify-between gap-4">
-        <div className="flex flex-col gap-[5px]">
+        <div className="flex flex-col gap-1.25">
           <span className="text-xs font-semibold tracking-caps text-text-subtle uppercase">
             Gestión del equipo
           </span>
@@ -130,7 +130,7 @@ function AccesoRestringido() {
         <h2 className="text-[15px] font-semibold text-text">
           Acceso restringido
         </h2>
-        <p className="max-w-[280px] text-[13px] text-text-muted">
+        <p className="max-w-70 text-[13px] text-text-muted">
           Solo quien lleva el equipo puede gestionarlo.
         </p>
       </div>
