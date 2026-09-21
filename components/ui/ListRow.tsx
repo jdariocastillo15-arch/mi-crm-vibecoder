@@ -22,6 +22,7 @@ export function ListRow({
   amount,
   href,
   onClick,
+  seleccionado = false,
   className,
 }: {
   name: string;
@@ -31,6 +32,15 @@ export function ListRow({
   /** Destino de la fila. Tiene prioridad sobre `onClick`. */
   href?: string;
   onClick?: () => void;
+  /**
+   * Fila seleccionada. Es contrato del paquete de diseño, que la pinta con el
+   * MISMO fondo que el hover: `const bg = selected || hover ? surface-2 : …`.
+   *
+   * No lleva `aria-selected`: ese atributo solo es válido dentro de un patrón
+   * contenedor —listbox, grid, tablist—, y aquí la fila es un enlace o un botón
+   * suelto. Ponerlo sería ARIA inválido, no accesibilidad.
+   */
+  seleccionado?: boolean;
   className?: string;
 }) {
   const interactiva = Boolean(href || onClick);
@@ -38,6 +48,7 @@ export function ListRow({
   const clases = cn(
     "flex w-full items-center gap-3 border-b border-border px-4.5 py-3.5 text-left last:border-b-0",
     interactiva && "cursor-pointer transition-colors hover:bg-surface-2",
+    seleccionado && "bg-surface-2",
     // El anillo de foco del sistema es una sombra que sobresale 4px, y la
     // tarjeta que envuelve la lista recorta lo que se salga de ella. Para las
     // filas se cambia por un contorno hacia dentro, que no se puede recortar.

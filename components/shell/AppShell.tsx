@@ -10,6 +10,7 @@ import { destinosPara, esPantallaCompleta } from "./nav";
 import { useSalirAlAcceso } from "./useSalirAlAcceso";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/IconButton";
+import { TabBar } from "@/components/ui/TabBar";
 import { ROL } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 
@@ -169,30 +170,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
 
         {/* ---- Barra de pestañas (móvil) ---- */}
-        {!pantallaCompleta && (
-          <nav
-            aria-label="Navegación principal"
-            className="flex shrink-0 border-t border-border bg-surface pb-safe-bottom md:hidden"
-          >
-            {destinos.map((d) => {
-              const activo = pathname.startsWith(d.href);
-              return (
-                <Link
-                  key={d.href}
-                  href={d.href}
-                  aria-current={activo ? "page" : undefined}
-                  className={cn(
-                    "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 py-2 transition-colors",
-                    activo ? "font-semibold text-primary" : "font-medium text-text-subtle",
-                  )}
-                >
-                  <d.icon size={22} strokeWidth={1.5} aria-hidden />
-                  <span className="text-[11px]">{d.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        )}
+        {!pantallaCompleta && <TabBar destinos={destinos} pathname={pathname} />}
       </div>
     </div>
   );

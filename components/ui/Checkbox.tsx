@@ -17,11 +17,20 @@ export function Checkbox({
   marcado,
   onChange,
   "aria-label": ariaLabel,
+  disabled = false,
   className,
 }: {
   marcado: boolean;
   onChange: () => void;
   "aria-label": string;
+  /**
+   * Apaga la casilla: ni responde al puntero ni llama a `onChange`.
+   *
+   * Hace falta porque el gesto dispara una mutación y hoy nada impide tocarla
+   * dos veces. Esta prop es la pieza; usarla para bloquear la mutación en vuelo
+   * en `SeccionSeguimientos` y `SeguimientosPendientes` es tarea aparte.
+   */
+  disabled?: boolean;
   className?: string;
 }) {
   return (
@@ -30,9 +39,11 @@ export function Checkbox({
       role="checkbox"
       aria-checked={marcado}
       aria-label={ariaLabel}
+      disabled={disabled}
       onClick={onChange}
       className={cn(
         "-ml-2.5 inline-flex size-11 shrink-0 items-center justify-center",
+        disabled && "cursor-not-allowed",
         className,
       )}
     >
@@ -41,7 +52,11 @@ export function Checkbox({
           "inline-flex size-6 items-center justify-center rounded-full transition-colors",
           marcado
             ? "bg-primary text-on-primary"
-            : "border-[1.5px] border-border-strong hover:border-primary",
+            : "border-[1.5px] border-border-strong",
+          // El hover solo tiene sentido si la casilla responde.
+          !marcado && !disabled && "hover:border-primary",
+          disabled && !marcado && "border-border",
+          disabled && marcado && "bg-border-strong",
         )}
       >
         {marcado && <Check size={14} strokeWidth={2.5} aria-hidden />}
