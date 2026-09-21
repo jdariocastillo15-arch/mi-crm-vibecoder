@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import { Providers } from "./providers";
+import { InlineScript } from "./InlineScript";
 import "./globals.css";
 
 /**
@@ -50,7 +51,28 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <ConvexAuthNextjsServerProvider>
-      <html lang="es" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      {/* `data-theme="light"` va en el JSX a propósito, no lo pone solo el
+          script. En desarrollo React remonta una vez y repone el `<html>` a los
+          atributos que gestiona desde aquí: si el valor por defecto no
+          estuviera, el atributo desaparecería en vez de volver a «light».
+          `TemaDelSistema` lo corrige después de hidratar. */}
+      <html
+        lang="es"
+        data-theme="light"
+        suppressHydrationWarning
+        className={`${inter.variable} ${jetbrainsMono.variable}`}
+      >
+        <head>
+          {/* Corre mientras el navegador analiza el HTML, antes del primer
+              pintado: por eso no hay destello blanco al abrir en oscuro.
+              Como todo script en línea, espera a que no quede ninguna hoja de
+              estilos pendiente. No cuesta nada visible —esa hoja ya bloquea el
+              pintado de todas formas—, pero una prueba que la retenga para
+              siempre deja la página sin analizar: ver `e2e/acceso.spec.ts`. */}
+          <InlineScript
+            html={`(function(){try{if(window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.dataset.theme='dark'}}catch(e){}})()`}
+          />
+        </head>
         <body>
           <Providers>{children}</Providers>
         </body>

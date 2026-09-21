@@ -55,7 +55,13 @@ test("el correo escrito antes de que cargue la página no se pierde", async ({
   const retenidos = new Promise<void>((resolver) => {
     soltar = resolver;
   });
-  await page.route("**/_next/static/chunks/**", async (ruta) => {
+  // SOLO el JavaScript, y el `.js` importa. Bajo `chunks/` vive también la hoja
+  // de estilos, y reteniéndola el navegador no puede ejecutar el script en línea
+  // del tema —uno en línea espera a que no queden hojas pendientes, porque
+  // podría consultar estilos calculados—, así que el análisis del HTML se para
+  // y la pantalla no llega a existir. El comentario de arriba ya decía «se
+  // retienen los scripts»: esto es acotarlo a lo que siempre quiso decir.
+  await page.route("**/_next/static/chunks/**.js", async (ruta) => {
     await retenidos;
     await ruta.continue();
   });
