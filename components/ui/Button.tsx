@@ -11,9 +11,14 @@ import { cn } from "@/lib/cn";
 type Variante = "primary" | "secondary" | "ghost" | "destructive";
 type Tamano = "default" | "compact";
 
+// Solo el primario tiene estado pulsado, y es lo que manda el paquete:
+// `if (variant === "primary") { if (active) … } else if (secondary || ghost) {
+// if (hover) … }`. Las otras tres variantes no responden al pulsar a propósito.
+// El primario baja un píxel además de oscurecerse, también del paquete:
+// `{ background: var(--color-primary-active), transform: "translateY(1px)" }`.
 const VARIANTES: Record<Variante, string> = {
   primary:
-    "bg-primary text-on-primary border border-transparent font-semibold hover:bg-primary-hover active:bg-primary-active",
+    "bg-primary text-on-primary border border-transparent font-semibold hover:bg-primary-hover active:bg-primary-active active:translate-y-px",
   secondary:
     "bg-surface text-text border border-border-strong font-medium hover:bg-surface-2",
   ghost:

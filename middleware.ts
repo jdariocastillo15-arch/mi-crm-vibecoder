@@ -12,7 +12,12 @@ import {
  * de Convex, que es donde de verdad importa. Ver `convex/helpers.ts`.
  */
 
+// Dos listas y no una, aunque hoy `esLogin` sea un subconjunto de `esPublica`.
+// Son dos preguntas distintas: "¿esta ruta sobra si ya has entrado?" y "¿esta
+// ruta se puede ver sin entrar?". Mezclarlas hacía que /galeria, al añadirla,
+// mandase a /hoy a cualquiera con sesión —incluidas sus propias pruebas—.
 const esLogin = createRouteMatcher(["/login"]);
+const esPublica = createRouteMatcher(["/login", "/galeria"]);
 
 export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
   const autenticado = await convexAuth.isAuthenticated();
@@ -21,7 +26,7 @@ export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
     return nextjsMiddlewareRedirect(request, "/hoy");
   }
 
-  if (!esLogin(request) && !autenticado) {
+  if (!esPublica(request) && !autenticado) {
     return nextjsMiddlewareRedirect(request, "/login");
   }
 });
