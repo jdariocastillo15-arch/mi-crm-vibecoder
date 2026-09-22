@@ -32,6 +32,16 @@ export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
 });
 
 export const config = {
-  // Todo menos ficheros estáticos y las entrañas de Next.
-  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+  // Todo menos ficheros estáticos, las entrañas de Next y el túnel de errores.
+  //
+  // EL TÚNEL es `/registro-de-errores`, la ruta que `next.config.ts` reescribe
+  // hacia Sentry para que el navegador mande allí lo que se rompe. No lleva
+  // punto, así que sin sacarla a mano el guardia la trataría como una pantalla
+  // más y, sin sesión, la mandaría a /login: se perderían justo los errores de
+  // la pantalla de acceso, que es donde nadie tiene sesión todavía.
+  matcher: [
+    "/((?!.*\\..*|_next|registro-de-errores).*)",
+    "/",
+    "/(api|trpc)(.*)",
+  ],
 };
