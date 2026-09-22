@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { ConvexError } from "convex/values";
 import { LogOut, TriangleAlert } from "lucide-react";
+import * as Sentry from "@sentry/nextjs";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useSalirAlAcceso } from "@/components/shell/useSalirAlAcceso";
@@ -27,7 +28,8 @@ import { useSalirAlAcceso } from "@/components/shell/useSalirAlAcceso";
  *   con `useSalirAlAcceso`, que ESPERA a `signOut()` antes de navegar: así el
  *   navegador llega a /login sin credenciales, y el middleware no lo devuelve.
  *
- * · CUALQUIER OTRO ERROR. Se ofrece reintentar y volver a Hoy.
+ * · CUALQUIER OTRO ERROR. Se ofrece reintentar y volver a Hoy, y el error se
+ *   manda a Sentry — implementa parte de JES-110.
  */
 export default function ErrorDeLaAplicacion({
   error,
@@ -40,8 +42,16 @@ export default function ErrorDeLaAplicacion({
   const sinSesion = esSinSesion(error);
 
   useEffect(() => {
-    if (sinSesion) void salir();
-  }, [sinSesion, salir]);
+    // La sesión caducada no se reporta: no es un fallo, es lo que pasa cuando
+    // se revoca una sesión con la aplicación abierta, y se resuelve sola.
+    // Mandarla a Sentry sería un evento por cada sesión que muere.
+    if (sinSesion) {
+      void salir();
+      return;
+    }
+
+    Sentry.captureException(error);
+  }, [sinSesion, salir, error]);
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-bg p-6">
