@@ -11,11 +11,13 @@ const nextConfig: NextConfig = {
  * Además de enchufar el SDK, el envoltorio hace dos cosas:
  *
  * · SUBE LOS SOURCE MAPS al construir, para que una pila de producción se lea
- *   con los nombres del código y no con los del minificado. Necesita
- *   SENTRY_AUTH_TOKEN, SENTRY_ORG y SENTRY_PROJECT, que solo están puestos en
- *   Railway: sin ellos el build pasa igual, pero no sube nada. Los mapas del
- *   navegador no se quedan en el build, así que el código sin minificar no
- *   acaba servido.
+ *   con los nombres del código y no con los del minificado. Lo único que hace
+ *   falta es SENTRY_AUTH_TOKEN, que solo está puesto en Railway: sin él el
+ *   build pasa igual, pero no sube nada. La organización y el proyecto van
+ *   escritos aquí y no en variables, porque no son secretos —salen de la URL
+ *   del panel— y así hay dos cosas menos que mantener. Los mapas del navegador
+ *   no se quedan en el build, así que el código sin minificar no acaba
+ *   servido.
  *
  * · EL TÚNEL. Los eventos salen por `/registro-de-errores`, una ruta del propio
  *   dominio, en vez de ir directos a Sentry, que es una dirección que bastantes
@@ -29,8 +31,8 @@ const nextConfig: NextConfig = {
  * recortaban ni un kB con Turbopack, así que no están: serían ruido.
  */
 export default withSentryConfig(nextConfig, {
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
+  org: "jesus-qx",
+  project: "vibe-crm",
   authToken: process.env.SENTRY_AUTH_TOKEN,
   widenClientFileUpload: true,
   tunnelRoute: "/registro-de-errores",
