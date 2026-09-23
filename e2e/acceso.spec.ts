@@ -61,12 +61,19 @@ test("el correo escrito antes de que cargue la página no se pierde", async ({
   // podría consultar estilos calculados—, así que el análisis del HTML se para
   // y la pantalla no llega a existir. El comentario de arriba ya decía «se
   // retienen los scripts»: esto es acotarlo a lo que siempre quiso decir.
+  let retenidosVistos = 0;
   await page.route("**/_next/static/chunks/**.js", async (ruta) => {
+    retenidosVistos += 1;
     await retenidos;
     await ruta.continue();
   });
 
   await page.goto("/login", { waitUntil: "commit" });
+  // Que el patrón de arriba siga casando con algo. Si Next cambiara dónde
+  // publica sus paquetes, no se retendría nada, la hidratación no se retrasaría
+  // y esta prueba seguiría en verde sin comprobar ya lo que dice comprobar.
+  await expect.poll(() => retenidosVistos).toBeGreaterThan(0);
+
   const campo = page.getByLabel("Email", { exact: true });
   // `.test` está reservado para pruebas (RFC 6761): ese dominio no existe ni
   // existirá, así que ningún correo puede llegar a nadie de verdad.

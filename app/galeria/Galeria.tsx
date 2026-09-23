@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { Search, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -87,8 +93,74 @@ function Cuadricula({ ficha }: { ficha: Ficha }) {
   );
 }
 
+/**
+ * El interruptor de la galería escribe en el `<html>`, igual que la aplicación.
+ *
+ * NO PUEDE ESCRIBIR EN SU PROPIO LIENZO. Desde JES-72 el `<html>` ya lleva
+ * `data-theme`, y las propiedades de color se heredan: con el sistema en
+ * oscuro, un lienzo sin atributo hereda ese oscuro y «Ver en claro» no hace
+ * nada. Poner `data-theme="light"` en el lienzo tampoco lo arregla, porque en
+ * `globals.css` el único bloque que existe es `[data-theme="dark"]`: no hay
+ * reglas de claro que puedan ganarle a las heredadas.
+ */
+function suscribirAlTema(alCambiar: () => void) {
+  const observador = new MutationObserver(alCambiar);
+  observador.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+  return () => observador.disconnect();
+}
+
+/** El modo vive en el DOM, no en un estado de React. */
+function leerTema() {
+  return document.documentElement.dataset.theme === "dark";
+}
+
+/**
+ * En el servidor no hay `<html>` que consultar, y `layout.tsx` lo pinta en
+ * claro. Sin esta tercera función `useSyncExternalStore` lanza al renderizar
+ * en el servidor, y la galería se pinta también ahí.
+ */
+function temaDelServidor() {
+  return false;
+}
+
 export function Galeria() {
-  const [oscuro, setOscuro] = useState(false);
+  /**
+   * El modo se LEE del `<html>` en vez de llevar una cuenta aparte, porque ese
+   * atributo lo tocan dos manos: este botón y `TemaDelSistema`, que sigue al
+   * sistema operativo. Con un `useState` propio, cambiar la preferencia del
+   * sistema movería el lienzo y dejaría el rótulo del botón mintiendo.
+   */
+  const oscuro = useSyncExternalStore(suscribirAlTema, leerTema, temaDelServidor);
+
+  /**
+   * ¿Ha tocado la galería el tema? Es un `ref` y no un estado porque solo lo
+   * mira la limpieza de abajo: como estado volvería a montar el efecto en cada
+   * pulsación, y la limpieza correría a destiempo.
+   */
+  const tocado = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (!tocado.current) return;
+      // El interruptor es de esta página. Al salir, el `<html>` vuelve a lo que
+      // diga el sistema: si no, la galería se llevaría su modo al resto de la
+      // aplicación, que no tiene ningún interruptor con el que deshacerlo.
+      document.documentElement.dataset.theme = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      ).matches
+        ? "dark"
+        : "light";
+    };
+  }, []);
+
+  const alternarTema = () => {
+    tocado.current = true;
+    document.documentElement.dataset.theme = oscuro ? "light" : "dark";
+  };
+
   // Arranca MARCADA: esta celda documenta el estado «seleccionado», así que
   // tiene que enseñarlo en reposo, no esconderlo detrás de un clic.
   const [marcada, setMarcada] = useState(true);
@@ -336,11 +408,7 @@ export function Galeria() {
   ];
 
   return (
-    <div
-      data-testid="lienzo"
-      data-theme={oscuro ? "dark" : undefined}
-      className="min-h-dvh bg-bg"
-    >
+    <div data-testid="lienzo" className="min-h-dvh bg-bg">
       <div className="mx-auto flex w-full max-w-content-max flex-col gap-8 px-4 py-8 md:px-8">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
@@ -352,12 +420,12 @@ export function Galeria() {
               demostración o la razón de su ausencia. Solo existe en desarrollo.
             </p>
           </div>
-          {/* El interruptor es local: nadie pone `data-theme` en la aplicación
-              todavía — eso es JES-72 — y sin él no se pueden ver los estados en
-              oscuro, que es la mitad del criterio 5. */}
+          {/* Escribe en el `<html>`, que es donde vive el modo desde JES-72.
+              Sin este botón no se pueden ver los estados en oscuro, que es la
+              mitad del criterio 5 de JES-41. */}
           <Button
             data-testid="cambiar-tema"
-            onClick={() => setOscuro((v) => !v)}
+            onClick={alternarTema}
             aria-pressed={oscuro}
           >
             {oscuro ? "Ver en claro" : "Ver en oscuro"}
