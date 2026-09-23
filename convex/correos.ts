@@ -9,6 +9,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { credenciales, pedirAGmail, tokenDeAcceso } from "./gmail";
 import { hoy, requireUser } from "./helpers";
+import { avisarLatido } from "./latido";
 import { direccionCorreo } from "./schema";
 import {
   clasificar,
@@ -212,6 +213,11 @@ export const cerrarPasada = internalMutation({
  * esté mal pegada, sale por el mismo sitio y se apunta igual. La única
  * excepción es que falte `GMAIL_BUZON`, porque sin él no se sabe en qué fila
  * escribirlo; eso solo se avisa por consola.
+ *
+ * Y como no lanzar deja el fallo en silencio, cada final avisa además al latido
+ * (`latido.ts`): la pasada buena lo pone en verde y las dos formas de fallo lo
+ * tumban. Que falte `GMAIL_BUZON` no avisa de nada y deja vencer el plazo, que
+ * también es enterarse.
  */
 export const sincronizar = internalAction({
   args: {},
@@ -342,17 +348,23 @@ export const sincronizar = internalAction({
         Date.now(),
       );
 
+      // Atascada: la ventana se queda como estaba y se dice por qué. Nunca se
+      // fuerza el techo hacia abajo, que es lo que perdía correo en silencio.
+      // Sale a una variable porque lo miran dos: la fila y el latido, y con una
+      // sola expresión no pueden desviarse.
+      const atasco = avance.atascada
+        ? `La ventana no avanza: hay más de ${PAGINAS_POR_PASADA * 100} ` +
+          `mensajes en el mismo segundo. Sube el presupuesto de páginas.`
+        : undefined;
+
       await ctx.runMutation(internal.correos.cerrarPasada, {
         buzon,
         ventana: avance.ventana,
         descartados,
-        // Atascada: la ventana se queda como estaba y se dice por qué. Nunca se
-        // fuerza el techo hacia abajo, que es lo que perdía correo en silencio.
-        error: avance.atascada
-          ? `La ventana no avanza: hay más de ${PAGINAS_POR_PASADA * 100} ` +
-            `mensajes en el mismo segundo. Sube el presupuesto de páginas.`
-          : undefined,
+        error: atasco,
       });
+
+      await avisarLatido(atasco);
     } catch (error) {
       const motivo =
         error instanceof Error ? error.message : "fallo desconocido";
@@ -364,6 +376,8 @@ export const sincronizar = internalAction({
         descartados,
         error: motivo,
       });
+
+      await avisarLatido(motivo);
     }
   },
 });

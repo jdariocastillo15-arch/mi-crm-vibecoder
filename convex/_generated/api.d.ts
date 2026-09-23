@@ -19,6 +19,7 @@ import type * as gmail from "../gmail.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as interacciones from "../interacciones.js";
+import type * as latido from "../latido.js";
 import type * as recuperar from "../recuperar.js";
 import type * as seguimientos from "../seguimientos.js";
 import type * as users from "../users.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   helpers: typeof helpers;
   http: typeof http;
   interacciones: typeof interacciones;
+  latido: typeof latido;
   recuperar: typeof recuperar;
   seguimientos: typeof seguimientos;
   users: typeof users;
