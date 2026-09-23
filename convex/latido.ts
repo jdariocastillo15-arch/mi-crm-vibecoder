@@ -60,7 +60,7 @@ export async function avisarLatido(error: string | undefined): Promise<void> {
       : undefined;
 
   try {
-    await (error === undefined
+    const respuesta = await (error === undefined
       ? // Una llamada a secas es «la pasada ha ido bien».
         fetch(url, { signal: señal })
       : // `/fail` declara el fallo en el acto, sin esperar a que venza el
@@ -71,6 +71,22 @@ export async function avisarLatido(error: string | undefined): Promise<void> {
           body: error.slice(0, MAXIMO_MOTIVO),
           signal: señal,
         }));
+
+    // `fetch` SOLO LANZA SI FALLA LA RED. Un 404 o un 410 vuelven como una
+    // respuesta de lo más normal, así que sin esto una URL equivocada o
+    // revocada no se nota por ningún lado.
+    //
+    // No es hipotético: el 2026-09-22 la variable de producción se puso con la
+    // URL de un latido de prueba que luego se borró, y el aviso estuvo tres
+    // pasadas de cron sin salir, en silencio absoluto. Better Stack tampoco
+    // avisa en ese caso, porque un latido que no ha recibido nunca una señal se
+    // queda «pendiente» en vez de caído: nadie protesta.
+    if (!respuesta.ok) {
+      console.warn(
+        `El latido del buzón respondió ${respuesta.status}. ` +
+          `Si se regeneró la URL, hay que actualizar LATIDO_CORREO_URL.`,
+      );
+    }
   } catch (fallo) {
     // La URL NO se imprime: es un secreto, y quien lea esto ya sabe de qué
     // latido se trata.
