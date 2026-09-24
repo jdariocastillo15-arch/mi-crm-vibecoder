@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useMutation } from "convex/react";
-import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api";
 import { Overlay } from "@/components/ui/Overlay";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { AVISOS } from "@/lib/constants";
+import { motivoOReporta } from "@/lib/errores";
 import type { Persona } from "./ListaEquipo";
 
 /**
@@ -33,14 +33,6 @@ const TEXTO_POR_MOTIVO: Record<string, string> = {
  * inventado.
  */
 const GENERICO = "No se ha podido eliminar";
-
-/** El motivo que viaja en el `data`, si es que lo hay. */
-function motivoDe(error: unknown): string | null {
-  if (!(error instanceof ConvexError)) return null;
-  const datos = error.data as { motivo?: unknown } | null | undefined;
-  if (datos === null || typeof datos !== "object") return null;
-  return typeof datos.motivo === "string" ? datos.motivo : null;
-}
 
 /**
  * Confirmar que se saca a alguien del equipo — implementa parte de JES-70.
@@ -80,7 +72,7 @@ export function DialogoEliminar({
       );
       onCerrar();
     } catch (e) {
-      const motivo = motivoDe(e);
+      const motivo = motivoOReporta(e);
       // La clave se comprueba como PROPIA: una búsqueda a secas encuentra
       // también lo heredado de `Object.prototype`, y un motivo llamado
       // `toString` devolvería una función, que no es nula y se colaría.

@@ -25,6 +25,7 @@ import { OverlayRegistrarVenta } from "@/components/clientes/OverlayRegistrarVen
 import { AVISOS } from "@/lib/constants";
 import { fechaLarga, hoy, sumarDias } from "@/lib/format";
 import { agruparParaHoy } from "@/lib/seguimientos";
+import { motivoOReporta } from "@/lib/errores";
 
 /**
  * "Hoy" — implementa JES-56, JES-57 y JES-58.
@@ -119,13 +120,18 @@ export default function HoyPage() {
     mostrar(AVISOS.seguimientoCompletado, {
       label: "Deshacer",
       onClick: () => {
-        deshacer({ seguimientoId: fila._id }).catch(() =>
-          mostrarError("No se ha podido deshacer"),
-        );
+        deshacer({ seguimientoId: fila._id }).catch((e) => {
+          mostrarError("No se ha podido deshacer");
+          // Fallar al deshacer deja la tarea marcada sin querer — JES-111.
+          motivoOReporta(e);
+        });
       },
     });
 
-    guardado.catch(() => mostrarError("No se ha podido guardar"));
+    guardado.catch((e) => {
+      mostrarError("No se ha podido guardar");
+      motivoOReporta(e);
+    });
   }
 
   function abrirAccion(accion: AccionRapida) {

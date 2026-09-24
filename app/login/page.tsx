@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Field";
 import { Logo } from "@/components/shell/AppShell";
 import { MINIMO_CONTRASENA } from "@/lib/constants";
 import { esEmailValido } from "@/lib/format";
+import { motivoOReporta } from "@/lib/errores";
 
 /**
  * Inicio de sesión — implementa JES-46, JES-83, JES-87 y JES-92.
@@ -180,13 +181,16 @@ export default function LoginPage({
     try {
       await signIn("google", { redirectTo: "/login?google=1" });
       // Si todo va bien, el navegador ya se ha ido a Google y esto no sigue.
-    } catch {
+    } catch (e) {
       // Aquí solo se llega si la llamada falla ANTES de salir hacia Google:
       // en la práctica, un despliegue sin AUTH_GOOGLE_ID o AUTH_GOOGLE_SECRET.
       setError(
         "No se ha podido conectar con Google. Avisa a quien administre el CRM.",
       );
       setCargandoGoogle(false);
+      // Esto SÍ se reporta: un despliegue sin credenciales es una avería, y sin
+      // Sentry solo se enteraría quien intentara entrar — JES-111.
+      motivoOReporta(e);
     }
   }
 
@@ -217,8 +221,11 @@ export default function LoginPage({
       setMotivo("elegir");
       setPaso(siguiente === "contrasena" ? "contrasena" : "codigo");
       setIntentado(false);
-    } catch {
+    } catch (e) {
       setError("No se ha podido continuar. Inténtalo otra vez.");
+      // Este paso solo mira si el correo existe y qué toca después: aquí no hay
+      // rechazo previsto que filtrar, así que todo lo que caiga es avería.
+      motivoOReporta(e);
     }
     setCargando(false);
   }
@@ -236,6 +243,12 @@ export default function LoginPage({
       await signIn("password", { email: correo, password, flow: "signIn" });
       router.push("/hoy");
     } catch {
+      // NO SE REPORTA, y es deliberado. Un rechazo previsto de este flujo no
+      // llega como `ConvexError` con motivo: `retrieveAccount` hace
+      // `throw new Error(codigo)` con la cadena cruda (ver `convex/cuenta.ts`),
+      // y en producción Convex la sustituye por «Server Error». Así que en
+      // cliente NO se puede distinguir de una avería, y reportar aquí sería un
+      // evento de Sentry por cada contraseña mal teclada — JES-111.
       setError("Email o contraseña incorrectos");
       setCargando(false);
     }
@@ -255,6 +268,10 @@ export default function LoginPage({
     } catch {
       // A propósito: no se cuenta. El servidor distingue los casos y esta
       // pantalla se niega a repetirlo.
+      //
+      // Y TAMPOCO SE REPORTA. Pedir el reinicio para un correo que no existe es
+      // lo más normal del mundo; en cliente no se distingue de una avería, y
+      // reportarlo delataría además qué correos existen — JES-111.
     }
     setCargando(false);
     setMotivo("cambiar");
@@ -291,6 +308,12 @@ export default function LoginPage({
       // usuario ya ha visto la pantalla mal.
       router.push("/hoy");
     } catch {
+      // NO SE REPORTA, y es deliberado. Un rechazo previsto de este flujo no
+      // llega como `ConvexError` con motivo: `retrieveAccount` hace
+      // `throw new Error(codigo)` con la cadena cruda (ver `convex/cuenta.ts`),
+      // y en producción Convex la sustituye por «Server Error». Así que en
+      // cliente NO se puede distinguir de una avería, y reportar aquí sería un
+      // evento de Sentry por cada código mal copiado o caducado — JES-111.
       setError(
         "El código no es válido o ya ha caducado. Vuelve a empezar si hace falta.",
       );

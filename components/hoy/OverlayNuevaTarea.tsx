@@ -9,6 +9,7 @@ import { Input, Select } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { AVISOS } from "@/lib/constants";
 import { esFechaValida } from "@/lib/format";
+import { motivoOReporta } from "@/lib/errores";
 
 /**
  * "Nueva tarea" — implementa JES-59.
@@ -71,11 +72,14 @@ export function OverlayNuevaTarea({
       mostrar(AVISOS.tareaCreada);
       setIntentado(false);
       onCreada();
-    } catch {
+    } catch (e) {
       // El texto lo pone el cliente, no el servidor: en producción Convex
       // oculta el mensaje de un error no controlado y llega «Server Error».
       // El porqué, largo, está en `components/cuenta/OverlayEditarDatos.tsx`.
       mostrarError("No se ha podido guardar");
+      // A Sentry solo si es inesperado — JES-111. Va DESPUÉS del aviso: así
+      // lo que ve la persona ya está puesto, y reportar no puede cambiarlo.
+      motivoOReporta(e);
     } finally {
       setGuardando(false);
     }

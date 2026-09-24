@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useAction } from "convex/react";
-import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api";
 import { Overlay } from "@/components/ui/Overlay";
 import { Input } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { AVISOS, MINIMO_CONTRASENA } from "@/lib/constants";
+import { motivoOReporta, reportaFalloParcial } from "@/lib/errores";
 
 /**
  * "Cambiar contraseña" — implementa parte de JES-49.
@@ -72,14 +72,6 @@ const MOTIVOS_DEL_CAMPO = new Set([
  */
 const GENERICO = "No se ha podido cambiar la contraseña";
 
-/** El motivo que viaja en el `data`, si es que lo hay. */
-function motivoDe(error: unknown): string | null {
-  if (!(error instanceof ConvexError)) return null;
-  const datos = error.data as { motivo?: unknown } | null | undefined;
-  if (datos === null || typeof datos !== "object") return null;
-  return typeof datos.motivo === "string" ? datos.motivo : null;
-}
-
 export function OverlayCambiarContrasena({
   abierto,
   onCerrar,
@@ -134,10 +126,21 @@ export function OverlayCambiarContrasena({
           ? AVISOS.contrasenaActualizada
           : `${AVISOS.contrasenaActualizada}, pero no se han podido cerrar las otras sesiones`,
       );
+
+      // Y A SENTRY, porque el aviso lo lee quien está delante y se va. Una
+      // contraseña cambiada que no cierra las otras sesiones deja viva
+      // exactamente lo que se quería cortar.
+      //
+      // Y el servidor no apunta NADA: su `catch` solo pone el booleano en
+      // `false` (`convex/cuenta.ts`), sin registro de ninguna clase. Esto es el
+      // único rastro que va a existir — JES-111, lo pidió la auditoría.
+      //
+      // El servidor lo DEVUELVE, no lo lanza, así que ningún `catch` lo ve.
+      if (!sesionesCerradas) reportaFalloParcial("sesiones_no_cerradas");
       limpiar();
       onCerrar();
     } catch (e) {
-      const motivo = motivoDe(e);
+      const motivo = motivoOReporta(e);
       // La clave se comprueba como PROPIA: una búsqueda a secas encuentra
       // también lo heredado de `Object.prototype`, y un motivo llamado
       // `toString` devolvería una función, que no es nula y se colaría.

@@ -7,6 +7,7 @@ import { Overlay } from "@/components/ui/Overlay";
 import { Input } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { AVISOS } from "@/lib/constants";
+import { motivoOReporta } from "@/lib/errores";
 
 /**
  * "Editar mis datos" — implementa parte de JES-49.
@@ -54,7 +55,7 @@ export function OverlayEditarDatos({
       await actualizar({ name: nombreLimpio });
       mostrar(AVISOS.datosActualizados);
       onCerrar();
-    } catch {
+    } catch (e) {
       // El texto lo pone el cliente, no el servidor. En producción Convex no
       // revela el mensaje de un error no controlado y lo sustituye por
       // «Server Error», así que enseñar `e.message` sería enseñar eso
@@ -62,6 +63,9 @@ export function OverlayEditarDatos({
       // el nombre vacío ya se valida antes de llamar, así que un error del
       // servidor solo aparece en una carrera y no hay nada que distinguir.
       mostrarError("No se ha podido guardar");
+      // A Sentry solo si es inesperado — JES-111. Va DESPUÉS del aviso: así
+      // lo que ve la persona ya está puesto, y reportar no puede cambiarlo.
+      motivoOReporta(e);
     } finally {
       setGuardando(false);
     }

@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/Toast";
 import { AVISOS } from "@/lib/constants";
 import { clasificar, pendientesPorVencimiento, textoVencimiento } from "@/lib/seguimientos";
 import { cn } from "@/lib/cn";
+import { motivoOReporta } from "@/lib/errores";
 
 /**
  * Seguimientos pendientes de un cliente — implementa JES-61.
@@ -71,13 +72,18 @@ export function SeguimientosPendientes({ clienteId }: { clienteId: Id<"clientes"
     mostrar(AVISOS.seguimientoCompletado, {
       label: "Deshacer",
       onClick: () => {
-        deshacer({ seguimientoId: seguimiento._id }).catch(() =>
-          mostrarError("No se ha podido deshacer"),
-        );
+        deshacer({ seguimientoId: seguimiento._id }).catch((e) => {
+          mostrarError("No se ha podido deshacer");
+          // Fallar al deshacer deja la tarea marcada sin querer — JES-111.
+          motivoOReporta(e);
+        });
       },
     });
 
-    guardado.catch(() => mostrarError("No se ha podido guardar"));
+    guardado.catch((e) => {
+      mostrarError("No se ha podido guardar");
+      motivoOReporta(e);
+    });
   }
 
   return (
