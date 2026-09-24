@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/Toast";
 import { CANAL_ORIGEN, type CanalOrigen } from "@/lib/constants";
 import { esEmailValido } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { motivoOReporta } from "@/lib/errores";
 
 /**
  * Alta rápida de cliente — implementa JES-52.
@@ -82,11 +83,14 @@ export function OverlayNuevoCliente({
         nota: form.nota.trim() || undefined,
       });
       onCreado(id);
-    } catch {
+    } catch (e) {
       // El texto lo pone el cliente, no el servidor: en producción Convex
       // oculta el mensaje de un error no controlado y llega «Server Error».
       // El porqué, largo, está en `components/cuenta/OverlayEditarDatos.tsx`.
       mostrarError("No se ha podido guardar");
+      // A Sentry solo si es inesperado — JES-111. Va DESPUÉS del aviso: así
+      // lo que ve la persona ya está puesto, y reportar no puede cambiarlo.
+      motivoOReporta(e);
     } finally {
       setGuardando(false);
     }

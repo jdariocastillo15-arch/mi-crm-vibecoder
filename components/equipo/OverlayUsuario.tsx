@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useAction, useMutation } from "convex/react";
-import { ConvexError } from "convex/values";
 import { Mail } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Overlay } from "@/components/ui/Overlay";
@@ -11,6 +10,7 @@ import { Chips } from "@/components/ui/Chips";
 import { useToast } from "@/components/ui/Toast";
 import { AVISOS, ROL, type RolUsuario } from "@/lib/constants";
 import { esEmailValido } from "@/lib/format";
+import { motivoOReporta, reportaFalloParcial } from "@/lib/errores";
 import type { Persona } from "./ListaEquipo";
 
 /**
@@ -68,14 +68,6 @@ const MOTIVOS_DEL_CAMPO = new Set(["email_duplicado", "email_invalido"]);
  * nuestra —de la red, de la librería—. Nunca un texto inventado.
  */
 const GENERICO = "No se ha podido guardar";
-
-/** El motivo que viaja en el `data`, si es que lo hay. */
-function motivoDe(error: unknown): string | null {
-  if (!(error instanceof ConvexError)) return null;
-  const datos = error.data as { motivo?: unknown } | null | undefined;
-  if (datos === null || typeof datos !== "object") return null;
-  return typeof datos.motivo === "string" ? datos.motivo : null;
-}
 
 const OPCIONES_ROL: { valor: RolUsuario; etiqueta: string }[] = [
   { valor: "comercial", etiqueta: ROL.comercial },
@@ -145,9 +137,26 @@ export function OverlayUsuario({
 
       // A partir de aquí la persona YA está dada de alta y puede entrar. Lo que
       // queda es cortesía, así que un fallo se cuenta sin deshacer nada.
-      const { enviado } = await avisar({ usuarioId }).catch(() => ({
-        enviado: false,
-      }));
+      //
+      // UN SOLO EVENTO POR FALLO. Este `.catch` convierte el rechazo en
+      // `enviado: false`, así que reportar la excepción Y el booleano sacaría el
+      // mismo fallo dos veces en Sentry. El centinela los separa: la excepción
+      // si la hubo, y el mensaje solo si el `false` vino del servidor, que son
+      // cosas distintas —«Resend dijo no» y «la llamada no llegó»—. Lo pidió la
+      // auditoría.
+      let reportado = false;
+      const { enviado } = await avisar({ usuarioId }).catch((e) => {
+        motivoOReporta(e);
+        reportado = true;
+        return { enviado: false };
+      });
+
+      // El `false` del servidor no es una excepción: lo devuelve tal cual
+      // (`convex/equipo.ts`), y ahí solo queda un `console.error` que nadie
+      // mira — JES-111.
+      if (!enviado && !reportado) {
+        reportaFalloParcial("aviso_de_alta_no_enviado");
+      }
 
       mostrar(
         enviado
@@ -159,7 +168,7 @@ export function OverlayUsuario({
       // Lo del correo se enseña EN EL CAMPO, que es donde se corrige; lo demás,
       // en un aviso. Lo decide el MOTIVO, no el texto del servidor, que en
       // producción no llega.
-      const motivo = motivoDe(e);
+      const motivo = motivoOReporta(e);
       // La clave se comprueba como PROPIA: una búsqueda a secas encuentra
       // también lo heredado de `Object.prototype`, y un motivo llamado
       // `toString` devolvería una función, que no es nula y se colaría.
