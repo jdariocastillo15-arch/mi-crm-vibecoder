@@ -5,6 +5,8 @@ import * as Sentry from "@sentry/nextjs";
 import { TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { TemaDelSistema } from "@/components/shell/TemaDelSistema";
+import { InlineScript, SCRIPT_DEL_TEMA } from "./InlineScript";
 import "./globals.css";
 
 /**
@@ -21,10 +23,17 @@ import "./globals.css";
  * que importar `globals.css` a mano: los estilos del layout raíz no llegan
  * aquí.
  *
- * SIEMPRE EN CLARO, a diferencia del resto de pantallas cuando entre JES-72: el
- * `data-theme` lo pone un componente que vive dentro de los proveedores, y aquí
- * no se monta ninguno. Habrá que montarlo también aquí para que esta pantalla
- * siga al sistema como las demás.
+ * SIGUE AL SISTEMA POR SU CUENTA, y tiene que hacerlo aquí dentro. Como
+ * reemplaza al documento, el `data-theme` que pone `app/layout.tsx` no llega, y
+ * `TemaDelSistema` tampoco, porque vive dentro de los proveedores. Lo dice Next
+ * en `01-app/03-api-reference/03-file-conventions/error.md`: «global-error…
+ * render their own document… so an app-level theme toggle won't reach them…
+ * apply it inside your own global-error component».
+ *
+ * Por eso repite las tres piezas del layout: el script en línea antes del
+ * primer pintado, el `data-theme` por defecto en el JSX —que el remontaje del
+ * modo estricto repone— y `TemaDelSistema` para el resto. Lo pilló la auditoría
+ * de JES-72 cuando todo lo demás ya estaba en verde.
  */
 export default function ErrorGlobal({
   error,
@@ -38,8 +47,12 @@ export default function ErrorGlobal({
   }, [error]);
 
   return (
-    <html lang="es">
+    <html lang="es" data-theme="light" suppressHydrationWarning>
+      <head>
+        <InlineScript html={SCRIPT_DEL_TEMA} />
+      </head>
       <body>
+        <TemaDelSistema />
         <main className="flex min-h-dvh items-center justify-center bg-bg p-6">
           <div className="w-full max-w-100">
             <Card>

@@ -19,6 +19,10 @@ import { expect, test } from "./prueba";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
+/** Los mismos de `e2e/tema.spec.ts`: `--color-bg` en cada modo. */
+const LIENZO_OSCURO = "rgb(14, 15, 17)"; //  #0e0f11
+const LIENZO_CLARO = "rgb(247, 248, 249)"; // #f7f8f9
+
 /** Los mismos nueve de `app/galeria/Galeria.tsx`, en el mismo orden. */
 const ESTADOS = [
   "reposo",
@@ -255,4 +259,34 @@ test("el modo oscuro cambia el lienzo", async ({ page }) => {
   await expect
     .poll(async () => lienzo.evaluate((el) => getComputedStyle(el).backgroundColor))
     .not.toBe(claro);
+});
+
+test.describe("con el sistema en oscuro", () => {
+  test.use({ colorScheme: "dark" });
+
+  /**
+   * La de arriba corre con el sistema en claro, y ahí el interruptor funcionaba
+   * aunque escribiera el `data-theme` en el lienzo en vez de en el `<html>`.
+   * Esta es la que lo pilla: con el sistema ya en oscuro, quitar el atributo
+   * del lienzo no devuelve nada a claro, porque el color se HEREDA del `<html>`.
+   */
+  test("el interruptor devuelve el lienzo a claro", async ({ page }) => {
+    await page.goto("/galeria");
+    // El mismo cuidado que en `tema.spec.ts`: en desarrollo React remonta una
+    // vez y borra el atributo del script, y `TemaDelSistema` lo repone después.
+    await expect(page.locator("html")).toHaveAttribute("data-tema-listo", "1");
+
+    const lienzo = page.getByTestId("lienzo");
+    const boton = page.getByTestId("cambiar-tema");
+
+    // La galería abre en oscuro porque el sistema lo está, y el botón lo sabe:
+    // lee el `<html>` en lugar de arrancar su propia cuenta en `false`.
+    await expect(boton).toHaveAttribute("aria-pressed", "true");
+    await expect(lienzo).toHaveCSS("background-color", LIENZO_OSCURO);
+
+    await boton.click();
+
+    await expect(boton).toHaveAttribute("aria-pressed", "false");
+    await expect(lienzo).toHaveCSS("background-color", LIENZO_CLARO);
+  });
 });
