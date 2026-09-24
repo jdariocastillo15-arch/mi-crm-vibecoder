@@ -43,10 +43,18 @@ export function ListaVentas({
   if (ventas.length === 0) {
     return (
       <Card padding={false}>
+        {/* EL `help` SE APARTA DEL DISEÑO A PROPÓSITO, porque ahí el diseño se
+            contradice: dice "Las ventas se registran desde la ficha de cada
+            cliente" (línea 382) teniendo justo encima su propio botón "Añadir
+            venta" (línea 357). Ese botón existe en la aplicación y funciona
+            —`OverlayRegistrarVenta` se abre sin `clienteId` y pregunta de quién
+            es la venta—, así que la frase al pie de la letra mandaba a otro
+            sitio a hacer lo que se puede hacer aquí. JES-74, decidido por la
+            dueña. El `title` sí es el del diseño, uno por filtro. */}
         <EmptyState
           icon={<TrendingUp size={28} strokeWidth={1.5} aria-hidden />}
           title={VACIO_POR_FILTRO[filtro]}
-          help="Las ventas se registran desde la ficha de cada cliente."
+          help="Las ventas se registran desde esta pantalla o desde la ficha de cada cliente."
         />
       </Card>
     );
