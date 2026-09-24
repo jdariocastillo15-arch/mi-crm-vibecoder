@@ -1,4 +1,16 @@
 /**
+ * El script del tema, en una constante y no copiado en cada sitio.
+ *
+ * Lo usan DOS documentos: `app/layout.tsx` y `app/global-error.tsx`, que
+ * reemplaza al anterior cuando revienta el layout raíz. Escrito dos veces, el
+ * día que se arregle uno el otro se queda con el fallo — y el segundo es
+ * justo la pantalla que nadie mira hasta que hace falta.
+ */
+export const SCRIPT_DEL_TEMA =
+  "(function(){try{if(window.matchMedia('(prefers-color-scheme: dark)').matches)" +
+  "{document.documentElement.dataset.theme='dark'}}catch(e){}})()";
+
+/**
  * Un script que corre mientras el navegador analiza el HTML — implementa parte
  * de JES-72.
  *
